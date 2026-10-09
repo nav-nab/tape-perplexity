@@ -228,6 +228,17 @@ The code is organised so that the script stays short. Each stage lives in its ow
 - A stage reports its progress as a fraction and its measured rate. Its estimated time to finish comes from that rate.
 - The whole-run estimate adds the estimates for the later stages. Before a stage has started, its estimate is the planned duration from the compute benchmark (about 62 minutes per training pass, about 2 hours of scoring). Once the stage runs, its measured rate replaces the plan.
 
+### Files kept in the repo
+
+The final model is stored in the repo so that the generation GUI runs without retraining.
+
+- **Weights.** Only the selected seed's final weights are committed, in a `models/` directory. At about 2.8 million parameters in 32-bit floats, the file is about 11 MB, well under GitHub's file size limit.
+- **Tokeniser.** The fitted tokeniser is committed with the weights: the price-move edges, the merged size bins and the vocabulary map. Without it the weights cannot be used, because token IDs would have no meaning.
+- **Model settings.** The architecture settings are saved with the weights, so the model can be rebuilt from the file alone.
+- **Not committed.** Checkpoints (which include optimiser state), the other two seeds, the downloaded data and the tokenised data. These are large or regenerable, and they are excluded by `.gitignore`.
+
+The script writes these files but does not run `git`. The commit is made by hand after the run finishes, so the repo history holds one version of the weights.
+
 ### The GUI
 
 The generation GUI is not a stage of this script. It is a separate command that reads the trained model and the tokenised data the script produces (see section 9).
