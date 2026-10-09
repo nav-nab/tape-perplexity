@@ -38,7 +38,7 @@ This file mirrors the running design log kept in the Claude project memory (`ind
 
 - Small causal transformer trained for next-token prediction.
 - Primary signal: rolling mean surprisal over the last $N$ events (perplexity).
-- Regime: realised volatility over a window of $M$ events (event time). Threshold still open.
+- Volatility measure settled: root mean square of the per-event tick moves over the last $M$ events (plain realised volatility in event time). No jump-robust or noise-corrected variants. $M$ and the threshold are still open.
 - Evaluation: plot perplexity against realised volatility over time, report the correlation on the test period, block-bootstrap confidence interval.
 - Left out by default: lead tests, GARCH or trade-intensity baselines, order book data, multiple architectures or token schemes.
 

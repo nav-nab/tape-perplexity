@@ -129,7 +129,14 @@ The window $N$ trades noise (small $N$) against lag (large $N$). It is open.
 ## 7. The regime (volatility) signal
 
 - Volatility is **realised volatility over the last $M$ events**. Windows are in *event time*, not clock time. This matches the token stream, which also has no clock.
-- The exact estimator (for example the root mean square of per-event price moves) is fixed together with $M$.
+- The estimator is the **root mean square (RMS) of the per-event price moves**, in ticks:
+
+$$
+\mathrm{RV}_t=\sqrt{\frac1M\sum_{i=0}^{M-1}\Delta_{t-i}^2},
+$$
+
+  where $\Delta_t$ is the price move of event $t$ (see the tokeniser design). The squared moves average to an estimate of the variance of a price move. Large sweeps count as high volatility, which is intended for a crash regime.
+- Bid-ask bounce adds a roughly constant offset to $\mathrm{RV}_t$, and heavy-tailed moves make it noisy. Both are accepted as properties of the setup.
 - A **high-volatility regime** is a threshold on realised volatility. The candidate threshold is the 90th percentile of the training period.
 
 ## 8. Evaluation
@@ -144,7 +151,7 @@ The window $N$ trades noise (small $N$) against lag (large $N$). It is open.
 | Decision | Notes |
 |---|---|
 | Surprisal window $N$ | Noise versus lag |
-| Volatility window $M$ and estimator | Event-time window |
+| Volatility window $M$ | Event-time window; noise against lag |
 | Regime threshold | Candidate: training 90th percentile |
 | Model size and training settings | Not yet discussed |
 | Bootstrap block length | Not yet discussed |
