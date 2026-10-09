@@ -20,39 +20,27 @@ There are no time fields. The token stream has no clock.
 
 ## Pipeline
 
-```
-raw aggTrade records (a, p, q, T, m, ...)
-        |
-        | 1. clean: drop p=0 or q=0, order by aggregate ID
-        v
-cleaned records
-        |
-        | 2. merge: consecutive records with the same side, the same timestamp,
-        |    and price strictly continuing in the aggressor direction -> one event
-        v
-events: (side, total size, last price)
-        |
-        | 3. derive: size bin, price move in ticks -> move class
-        v
-(side, size bin, move class)
-        |
-        | 4. encode: one integer, vocabulary <= 224
-        v
-token sequence
+```mermaid
+flowchart TD
+    A["Raw aggTrade records<br/>fields a, p, q, T, m"] --> B["1. Clean<br/>drop p = 0 or q = 0, order by aggregate ID"]
+    B --> C["2. Merge<br/>same side, same timestamp, price strictly continuing<br/>consecutive records become one event"]
+    C --> D["Events<br/>side, total size, last price"]
+    D --> E["3. Derive<br/>size bin, price move in ticks, move class"]
+    E --> F["4. Encode<br/>one integer per event, vocabulary up to 224"]
+    F --> G["Token sequence"]
 ```
 
 ## The token at a glance
 
-```
- token = ( side , size bin , price-move class )
-            2       <= 16          7
+Each token combines three fields.
 
- side         :  buy aggressor | sell aggressor
- size bin     :  log-spaced edges, 3 per decade, rare tails merged
- move class   :  flat | up 1 tick | up mid | up large | down 1 tick | down mid | down large
+| Field | Values | Meaning |
+|---|---|---|
+| Side | 2 | Buy aggressor or sell aggressor |
+| Size bin | up to 16 | Log-spaced edges, 3 per decade, rare tails merged |
+| Move class | 7 | Flat, up 1 tick, up mid, up large, down 1 tick, down mid, down large |
 
- vocabulary   :  at most 2 x 16 x 7 = 224 tokens, one softmax
-```
+The vocabulary is at most $2\times16\times7=224$ tokens, with one softmax over all of them.
 
 ## Worked example (illustrative numbers)
 
@@ -129,24 +117,24 @@ $$ e_k = 5\times10^{-5}\cdot 10^{k/3}\ \text{BTC},\qquad k=1,\dots,15. $$
 
 The constant $5\times10^{-5}$ BTC is about the minimum notional (5 USDT at current prices). The 15 edges give up to 16 bins:
 
-```
-bin  1:  below 1.08e-4 BTC          (includes the smallest lots)
-bin  2:  1.08e-4  to  2.32e-4
-bin  3:  2.32e-4  to  5.00e-4
-bin  4:  5.00e-4  to  1.08e-3
-bin  5:  1.08e-3  to  2.32e-3       <- contains 0.002 BTC, a very common size
-bin  6:  2.32e-3  to  5.00e-3
-bin  7:  5.00e-3  to  1.08e-2
-bin  8:  1.08e-2  to  2.32e-2
-bin  9:  2.32e-2  to  5.00e-2
-bin 10:  5.00e-2  to  0.108
-bin 11:  0.108    to  0.232
-bin 12:  0.232    to  0.500
-bin 13:  0.500    to  1.08
-bin 14:  1.08     to  2.32
-bin 15:  2.32     to  5.00
-bin 16:  5.00 BTC and above
-```
+| Bin | From (BTC) | To (BTC) | Note |
+|---|---|---|---|
+| 1 | 0 | 1.08e-4 | includes the smallest lots |
+| 2 | 1.08e-4 | 2.32e-4 | |
+| 3 | 2.32e-4 | 5.00e-4 | |
+| 4 | 5.00e-4 | 1.08e-3 | |
+| 5 | 1.08e-3 | 2.32e-3 | contains 0.002 BTC, a very common size |
+| 6 | 2.32e-3 | 5.00e-3 | |
+| 7 | 5.00e-3 | 1.08e-2 | |
+| 8 | 1.08e-2 | 2.32e-2 | |
+| 9 | 2.32e-2 | 5.00e-2 | |
+| 10 | 5.00e-2 | 0.108 | |
+| 11 | 0.108 | 0.232 | |
+| 12 | 0.232 | 0.500 | |
+| 13 | 0.500 | 1.08 | |
+| 14 | 1.08 | 2.32 | |
+| 15 | 2.32 | 5.00 | |
+| 16 | 5.00 | no upper limit | |
 
 (Edges rounded to three significant figures. Three of them, $5\times10^{-4}$, $5\times10^{-3}$ and $0.05$, fall exactly on a multiple of the lot step. See [section 9](#9-implementation-details-not-yet-pinned-down).)
 
@@ -186,15 +174,33 @@ The decision was to accept the lower entropy in exchange for interpretability, f
 
 ## 6. Field 3: price move (decisions 1, 3 and 4)
 
-### Definition (decision 1)
+Three separate questions define this field. Each has its own decision.
 
-The price move of event $t$ is
+| Decision | Question it answers | Answer |
+|---|---|---|
+| 1 | **Which two prices** are compared? | The last fill of this event, and the last fill of the previous event |
+| 3 | **In what unit** is the difference written? | Ticks of 0.01 USDT, as a whole number |
+| 4 | **How is the number sorted** into classes? | Flat, plus three magnitude bins in each direction |
 
-$$ \Delta_t = \frac{P^{\text{last}}_t - P^{\text{last}}_{t-1}}{0.01}, $$
+### Decision 1: which prices are compared
 
-where $P^{\text{last}}_t$ is the last fill price of event $t$. It is measured **in ticks** (decision 3), so it is a whole number. It is the last fill of this event minus the last fill of the previous event, so it includes any gap between events and the full impact of a sweep.
+The move of event $t$ compares the last fill price of event $t$ with the last fill price of event $t-1$:
 
-### Classes (decision 4)
+$$ \Delta P_t = P^{\text{last}}_t - P^{\text{last}}_{t-1}. $$
+
+An event can contain several fills at rising or falling prices. Using the last fill captures the whole impact of the order. Using the previous event's last fill also captures any gap between the two events.
+
+### Decision 3: the unit
+
+$\Delta P_t$ is divided by the tick size, so the move is a whole number of ticks:
+
+$$ \Delta_t = \frac{\Delta P_t}{0.01}. $$
+
+The alternative was basis points (a percentage of price). Ticks were chosen because the tick is the smallest possible price step, so the result is an exact integer and does not need rounding.
+
+Example: the previous event ended at 82,000.10 and this event ended at 82,000.13. Decision 1 says to subtract these two prices, which gives 0.03 USDT. Decision 3 says to write that as 3 ticks.
+
+### Decision 4: the classes
 
 Seven classes: **flat** ($\Delta_t=0$) plus three magnitude bins in each direction ($k=3$).
 
@@ -238,15 +244,15 @@ These were not discussed explicitly. Pick a sensible choice, record it in the de
 
 ## 10. Decision log
 
-| # | Decision | Chosen | Alternatives rejected |
+| # | Question | Chosen | Alternatives rejected |
 |---|---|---|---|
-| Merge | Aggregate records into events | Merge by default | Treat each Binance record as a token |
-| 1 | Price-move reference | Last fill of this event minus last fill of previous event | Not recorded here; see the project memory |
-| 2 | Merge test | Same side + same timestamp + price strictly continues | Trade-ID contiguity (vacuous: 100% contiguous) |
-| 3 | Move unit | Ticks (0.01 USDT) | Basis points |
-| 4 | Move magnitude bins | Bin 1 = exactly 1 tick; bins 2, 3 split moves $\ge2$ at the training median; shared edges up and down | Terciles of all nonzero moves |
-| 5.1 | Size unit | BTC | USDT notional |
-| 5.2 | Size bins | Log-spaced, 3 per decade from $5\times10^{-5}$ BTC, tail bins under ~1% merged | Quantile bins with merged duplicate edges; random tie-breaking |
+| Merge | Treat each Binance record as a token, or merge into events? | Merge into events | One token per record |
+| 1 | Which two prices define the price move? | Last fill of this event minus last fill of the previous event | Not recorded here; see the project memory |
+| 2 | When do consecutive records belong to one event? | Same side, same timestamp, price strictly continuing in the aggressor direction | Trade-ID contiguity (vacuous: 100% contiguous) |
+| 3 | What unit is the price move written in? | Ticks (0.01 USDT) | Basis points |
+| 4 | How are the moves sorted into classes? | Bin 1 = exactly 1 tick; bins 2 and 3 split moves of 2 or more at the training median; shared edges up and down | Terciles of all nonzero moves |
+| 5.1 | What unit is size written in? | BTC | USDT notional |
+| 5.2 | How are sizes sorted into bins? | Log-spaced, 3 per decade from $5\times10^{-5}$ BTC, tail bins under about 1% merged | Quantile bins with merged duplicate edges; random tie-breaking |
 
 Other fixed choices: $k=3$ magnitude bins per direction, single composite token, no time fields, edges fit on training only.
 

@@ -1,0 +1,48 @@
+# Design log
+
+This file mirrors the running design log kept in the Claude project memory (`index.md`). It records each design decision as it was made. The detailed write-ups are in [project-design.md](project-design.md) and [tokeniser-design.md](tokeniser-design.md).
+
+**Last synced with project memory:** 2026-10-09.
+
+## Repo and process
+
+- The git repo is `tape-perplexity` (branch `main`). Commit locally after any substantive change. The owner pushes to the remote.
+- When a design decision is made, log it here and in the project memory, and update the two design documents if they are affected.
+
+## Goal
+
+- Laptop-scale ML research project in finance: train a small transformer on tokenised BTC trade sequences and test whether its perplexity ("model confusion") tracks volatility regimes. It is a regime detector, not a price predictor.
+- The claim is detection (perplexity tracks regimes). A lead or early-warning test is left for later, only if the first result is strong.
+
+## Data
+
+- Binance spot BTCUSDT aggregated trades (data.binance.vision). Crypto was chosen because the non-crypto options cost money.
+- One contiguous period of 2 to 3 months, from 2025 onwards (timestamps in microseconds), containing both calm and stressed stretches. Exact dates still open.
+- Records with zero price or zero quantity are dropped.
+- Chronological split, training strictly before testing.
+
+## Tokeniser
+
+- No time fields in the tokens. Records are ordered by aggregate trade ID.
+- Merge by default: consecutive records form one event (one taker order) when they have the same side and the same timestamp, and the price moves strictly in the aggressor's direction (higher for buys, lower for sells). The trade-ID contiguity test is dropped.
+- Decision 1 settled: the price move of a merged event is its last fill price minus the previous event's last fill price, so it covers the order's whole impact.
+- Decision 2 settled: the merge test is side, timestamp, and price strictly continuing in the aggressor's direction.
+- Decision 3 settled: the price move is measured in ticks (0.01 USDT, whole numbers), not basis points.
+- Decision 4 settled: magnitude bins per direction are: bin 1 is exactly 1 tick; bins 2 and 3 split the moves of 2 or more ticks at their training median. Edges are fit on absolute moves in the training period and shared between up and down moves.
+- Decision 5, part 1 settled: size is measured in BTC (the native unit of the data), not USDT notional.
+- Decision 5, part 2 settled: size bins are log-spaced, not quantile bins. Resolution is 3 bins per decade, with edges at $5\times10^{-5}\cdot10^{k/3}$ BTC. Tail rule: any top or bottom bin holding under about 1% of training events is merged into its neighbour, so the outermost bins are open-ended. Reason: log scale matches how humans perceive magnitude, fitting the "linguifying the tape" view of tokenisation.
+- One composite token per event with three fields: side (2), size (log-spaced bins with tail merge, at most 16), price move (7: flat plus 3 magnitude bins per direction, i.e. $k=3$). Vocabulary at most $2\times16\times7=224$, single softmax.
+- Only the tail-merge rule and the price-move magnitude edges are fit to the training period. The log size edges are fixed constants.
+
+## Model, signal, evaluation
+
+- Small causal transformer trained for next-token prediction.
+- Primary signal: rolling mean surprisal over the last $N$ events (perplexity).
+- Regime: realised volatility over a window of $M$ events (event time). Threshold still open.
+- Evaluation: plot perplexity against realised volatility over time, report the correlation on the test period, block-bootstrap confidence interval.
+- Left out by default: lead tests, GARCH or trade-intensity baselines, order book data, multiple architectures or token schemes.
+
+## Open decisions
+
+- Project level: $N$ (surprisal window), $M$ (volatility window), regime threshold, exact dates.
+- Tokeniser: all decisions settled (1 to 5).

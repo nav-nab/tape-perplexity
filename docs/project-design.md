@@ -23,24 +23,17 @@ The test is whether the network's *perplexity* (how surprised it is by the next 
 
 ## Pipeline at a glance
 
-```
- Binance BTCUSDT aggTrades (raw records, microsecond timestamps)
-              |
-              |  clean: drop invalid records, order by aggregate trade ID
-              v
- merge records that belong to one taker order  ->  "events"
-              |
-              |  tokenise: side x size bin x price-move class
-              v
- token sequence (vocabulary <= 224, no time fields)
-              |
-              |  train on the training period (causal transformer, next-token loss)
-              v
- per-event surprisal on the test period
-              |                                         realised volatility over M events
-              |  rolling mean over N events                          |
-              v                                                      v
- "perplexity" series  ------------ compare (plot, correlation, block-bootstrap CI) ------------ volatility / regime flag
+```mermaid
+flowchart TD
+    A["Binance BTCUSDT aggTrades<br/>raw records, microsecond timestamps"] --> B["Clean and order<br/>drop invalid records, sort by aggregate trade ID"]
+    B --> C["Merge records into events<br/>one event = one taker order"]
+    C --> D["Tokenise<br/>side, size bin, price-move class<br/>vocabulary up to 224, no time fields"]
+    D --> E["Train causal transformer<br/>next-token loss, training period"]
+    E --> F["Per-event surprisal<br/>test period"]
+    F --> G["Rolling mean over N events<br/>perplexity series"]
+    C --> H["Realised volatility over M events<br/>regime flag"]
+    G --> I["Compare<br/>plot, correlation, block-bootstrap CI"]
+    H --> I
 ```
 
 ## What this project is not
