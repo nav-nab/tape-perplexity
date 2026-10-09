@@ -113,7 +113,7 @@ Specified in full in [tokeniser-design.md](tokeniser-design.md). In brief:
 - A small causal (decoder-only) transformer, trained with next-token cross-entropy on the training period.
 - **Size:** 6 layers, width 192, 6 attention heads, about 2.8 million parameters. Learned positions, pre-norm layers, GELU, tied input and output embeddings.
 - **Context:** 512 events.
-- **Compute:** the laptop (Intel i5-1038NG7, 4 cores) has no GPU that PyTorch can use, so training runs on CPU. Measured on random tokens: training runs at about 8,400 tokens/s, so one pass over 31 million events takes about 62 minutes. Forward-only scoring runs at about 27,000 tokens/s. One seed trains in about 62 minutes, so three seeds take about 3.1 hours. Only the selected seed is scored, which takes about 2 hours. With 15 to 20 minutes of data preparation, the whole run takes about 5 hours.
+- **Compute:** the laptop (Intel i5-1038NG7, 4 cores) has no GPU that PyTorch can use, so training runs on CPU. Measured on random tokens: training runs at about 8,400 tokens/s, so one pass over 31 million events takes about 62 minutes. Forward-only scoring runs at about 27,000 tokens/s. One seed trains in about 62 minutes, so three seeds take about 3.1 hours. Only the selected seed is scored, which takes about 2 hours. With 15 to 20 minutes of data preparation, the headline result takes about 5 hours. The dependence check scores the training period as well (about 2.5 hours more), so the whole run takes about 7.5 hours.
 - The vocabulary is small, so the output layer is cheap.
 
 ### Training
@@ -151,7 +151,7 @@ Every test event gets a surprisal from the frozen model, given the events just b
 - **Why not plain chunks.** The model reads at most 512 events. If the test stream were cut into plain 512-event chunks, the first event of each chunk would have no history and the last would have 511. Surprisal falls as history grows, so the series would show a spurious sawtooth with a period of 512 events.
 - **Sliding windows.** A 512-event window slides over the test stream with a **stride of 64** events. In each window, only the last 64 events are scored. Every scored event therefore has between 448 and 511 events of history. A stride of 1 would give exactly 511 for every event, but would take about 5.5 days on the laptop.
 - **Month boundary.** The stream is continuous across the boundary between October and November. The first November events take their history from the last 511 October events. Those October events are context only and are not scored.
-- **Cost.** About 200 million token-forwards for November, estimated at about 2 hours on the laptop CPU (range 2 to 3 hours). Only the selected model is scored.
+- **Cost.** About 200 million token-forwards for November, estimated at about 2 hours on the laptop CPU (range 2 to 3 hours). Only the selected model is scored. The dependence check (section 11) scores the training period the same way, which takes about 2.5 hours.
 
 ## 7. The regime (volatility) signal
 
@@ -214,7 +214,7 @@ Run it with `python gui.py` (add `--open` to open a browser). It reads only `mod
 
 The whole study runs from one script. Three behaviours are required of it.
 
-- **One command.** A single script runs the full workflow in order, from the raw data to the final figures. The data pipeline (download, clean and merge, tokenise) is its first part. The stages are: download, clean and merge, fit the tokeniser and tokenise, train the three seeds, select the seed, score the test month, evaluate, and export the files kept in the repo.
+- **One command.** A single script runs the full workflow in order, from the raw data to the final figures. The data pipeline (download, clean and merge, tokenise) is its first part. The stages are: download, clean and merge, fit the tokeniser and tokenise, train the three seeds, select the seed, score the test month, evaluate, export the files kept in the repo, score the training period, and run the dependence check. The headline result and the exported files are complete before the last two stages.
 - **Checkpoints every 10 minutes of wall time.** The run can be interrupted at any point and resumed by running the same command again.
 - **A heartbeat every minute.** Each line gives the current stage, its progress and the estimated time to finish the whole run.
 
@@ -235,6 +235,8 @@ Run `python run.py` for the study and `python run.py --smoke` for a tiny version
 | `score` | `tape/stages/score.py` | `data/surprisal.npy` |
 | `evaluate` | `tape/stages/evaluate.py`, `tape/stats.py` | `results/results.json`, `results/timeseries.png`, `results/scatter.png` |
 | `export` | `tape/stages/export.py` | `models/model.pt`, `models/tokeniser.json`, `models/prompt_excerpts.json` |
+| `score_train` | `tape/stages/score.py` | `data/surprisal_train.npy` |
+| `dependence` | `tape/stages/dependence.py` | `results/dependence_check.json`, `results/dependence_check.png` |
 
 The runtime machinery (atomic writes, checkpoint timing, heartbeat, stage runner) is in `tape/runtime.py`. Tests are in `tests/`: unit tests, and end-to-end runs on synthetic Binance-format files that include an interrupt-and-resume check.
 
@@ -274,7 +276,7 @@ The generation GUI is not a stage of this script. It is a separate command (see 
 
 There are no open decisions. Two planned checks are handled as follows.
 
-- **Dependence of the surprisal series.** The plan was to repeat the block-length check on the surprisal series of the training period. Scoring the training period would cost as much as scoring the test month, so the evaluation stage reports the autocorrelation of both series on the test month instead (in `results.json`). This is a cheaper stand-in. If it suggests dependence beyond one day, the block length should be revisited (see [block-bootstrap.md](block-bootstrap.md)).
+- **Dependence of the surprisal series.** The block length was chosen from the autocorrelation of log RV alone. The `score_train` and `dependence` stages repeat the check on the series the statistic is built from. They score the training period with the selected model, then report the autocorrelation of both series and the bootstrap standard error of the correlation for block lengths from 1,000 to 2,000,000 events. If the standard error is still rising at 1,000,000 events, the interval is too narrow and the block length should be revisited (see [block-bootstrap.md](block-bootstrap.md)). The model was trained on these events, so the surprisal is in-sample. The check measures dependence, not the size of the correlation.
 - **Loss by position.** Training saves the mean loss at each position within a chunk (`summary.json`). It confirms that scored events, which have 448 to 511 events of history, sit on the flat part of the curve.
 
 ## 12. Design rationale

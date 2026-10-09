@@ -67,9 +67,15 @@ def test_full_smoke_pipeline(tmp_path, raw_dir):
     # every test event was scored with a finite, positive surprisal
     s = np.load(d / "work_smoke" / "data" / "surprisal.npy")
     assert np.isfinite(s).all() and (s > 0).all()
+    # the dependence check on the training period ran and produced its table
+    dep = json.loads((d / "results_smoke" / "dependence_check.json").read_text())
+    assert len(dep["blocks"]) >= 3 and all(b["se"] > 0 for b in dep["blocks"])
+    assert (d / "results_smoke" / "dependence_check.png").exists()
+    tr = np.load(d / "work_smoke" / "data" / "surprisal_train.npy")
+    assert np.isnan(tr[:127]).all() and np.isfinite(tr[127:]).all()      # first context-1 events are not scored
     # a second run does nothing (all stages finished)
     code, out = run([], d)
-    assert code == 0 and out.count("already finished") == 11
+    assert code == 0 and out.count("already finished") == 13
 
 
 def test_interrupt_and_resume_matches_uninterrupted(tmp_path, raw_dir):

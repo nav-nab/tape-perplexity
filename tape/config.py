@@ -83,6 +83,8 @@ class Config:
     n_boot: int = 2000
     boot_seed: int = 12345
     plot_points: int = 6000        # points drawn in the time-series figure
+    # Block lengths tried in the dependence check on the training period (events).
+    dependence_block_lens: tuple = (1_000, 10_000, 100_000, 300_000, 1_000_000, 2_000_000)
 
     # --------------------------------------------------------------- excerpts
     excerpts_per_kind: int = 5     # 5 volatile + 5 calm
@@ -101,6 +103,8 @@ class Config:
         "download": 600.0, "events": 150.0, "tokenise": 120.0, "volatility": 30.0,
         "train": 3720.0,   # per seed: about 62 minutes
         "select": 5.0, "score": 7200.0, "evaluate": 300.0, "export": 60.0,
+        "score_train": 9000.0,   # the training period is about 1.25 times the test month
+        "dependence": 120.0,
     })
 
     # ------------------------------------------------------------------ helpers
@@ -120,11 +124,12 @@ class Config:
             stride=16, score_batch_windows=64,
             M=300, N=300, block_len=20_000, n_boot=200,
             excerpts_per_kind=2, excerpt_continuation=32,
+            dependence_block_lens=(500, 2_000, 5_000, 20_000, 50_000),
             checkpoint_interval_s=20.0, heartbeat_interval_s=5.0,
             plot_points=2000,
             planned_s={"download": 60.0, "events": 60.0, "tokenise": 20.0, "volatility": 5.0,
                        "train": 120.0, "select": 1.0, "score": 120.0, "evaluate": 20.0,
-                       "export": 5.0},
+                       "export": 5.0, "score_train": 120.0, "dependence": 10.0},
         )
 
     def replace(self, **kw) -> "Config":
@@ -158,7 +163,7 @@ class Config:
     def stage_names(self) -> list[str]:
         return (["download", "events", "tokenise", "volatility"]
                 + [f"train_seed{s}" for s in self.seeds]
-                + ["select", "score", "evaluate", "export"])
+                + ["select", "score", "evaluate", "export", "score_train", "dependence"])
 
     def planned_for(self, stage: str) -> float:
         key = "train" if stage.startswith("train_seed") else stage

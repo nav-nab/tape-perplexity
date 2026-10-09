@@ -192,3 +192,24 @@ def test_config_fingerprint_ignores_paths_but_not_settings():
     c = Config.smoke()
     assert c.fingerprint() == c.replace(workdir="elsewhere", threads=3).fingerprint()
     assert c.fingerprint() != c.replace(M=301).fingerprint()
+
+
+def test_sliding_window_scoring_matches_brute_force():
+    """Each scored event must equal -log p given exactly the window the design says it gets."""
+    import torch.nn.functional as F
+    from tape.stages.score import score_stream
+    torch.manual_seed(0)
+    L, stride, n_ctx, n_test = 32, 8, 31, 50           # 50 is not a multiple of 8: exercises the short last window
+    m = GPT(ModelConfig(vocab=20, n_layer=2, d_model=32, n_head=4, context=L)).eval()
+    ext = np.random.default_rng(0).integers(0, 20, n_ctx + n_test).astype(np.uint8)
+    got = score_stream(m, ext, n_ctx, stride, batch_windows=3)
+    assert got.shape == (n_test,) and np.isfinite(got).all()
+    for j in (0, 1, 7, 8, 9, 30, 47, 48, 49):          # first, window edges, last
+        k = j // stride
+        end = min(n_ctx + stride * (k + 1), len(ext))
+        start = end - L
+        hist = ext[start:n_ctx + j]                     # everything the window holds before event j
+        assert L - stride <= len(hist) <= L - 1         # 448..511 events of history, scaled down
+        with torch.no_grad():
+            logp = F.log_softmax(m(torch.from_numpy(hist.astype(np.int64))[None])[0, -1], -1)
+        assert got[j] == pytest.approx(-logp[int(ext[n_ctx + j])].item(), abs=1e-4)
