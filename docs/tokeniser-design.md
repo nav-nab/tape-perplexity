@@ -36,7 +36,7 @@ flowchart TD
 |---|---|---|
 | Side | 2 | Buy aggressor or sell aggressor |
 | Size bin | up to 16 | Log-spaced edges, 3 per decade, rare tails merged |
-| Move class | 7 | Flat, up 1 tick, up mid, up large, down 1 tick, down mid, down large |
+| Move class | 7 | Down large, down mid, down 1 tick, flat, up 1 tick, up mid, up large |
 
 The vocabulary is at most $2\times16\times7=224$ tokens, with one softmax over all of them.
 
@@ -209,7 +209,15 @@ Why bin 1 is exactly one tick: it is the smallest nonzero move. In the live samp
 
 ## 7. Encoding
 
-Let $S$ be the number of size bins after the tail rule. Number the sides $0$ to $1$, the size bins $0$ to $S-1$ and the move classes $0$ to $6$. The token ID is
+Let $S$ be the number of size bins after the tail rule. Number the sides, size bins and move classes as follows:
+
+| Field | Numbering |
+|---|---|
+| Side | 0 = sell aggressor, 1 = buy aggressor |
+| Size bin | 0 to $S-1$, from the smallest to the largest |
+| Move class | 0 = down large, 1 = down mid, 2 = down 1 tick, 3 = flat, 4 = up 1 tick, 5 = up mid, 6 = up large |
+
+The token ID is
 
 $$
 \text{id} = (\text{side}\cdot S + \text{size}) \cdot 7 + \text{move}.

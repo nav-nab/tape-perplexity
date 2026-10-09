@@ -36,6 +36,12 @@ flowchart TD
     H --> I
 ```
 
+## Around the study
+
+- **Token icons.** Every token has a small picture that shows its side, size and price move. They illustrate the write-up and make up the banner at the top of the README. See [token-icons.md](token-icons.md).
+- **Generation GUI.** A small app that continues a starting sequence of events by sampling new tokens from the trained model. It is a demonstration, not part of the test (section 9).
+- **One script.** The whole study, from the raw data to the final figures, runs from a single resumable script (section 10).
+
 ## What this project is not
 
 - It is **not a price predictor.** The model is only asked how surprised it is.
@@ -72,12 +78,12 @@ Left out by default:
 
 ## 3. Data
 
-- **Source:** Binance spot, symbol BTCUSDT, aggregated trades ("aggTrades"). Daily and monthly files are published at data.binance.vision. The CSV files have no header row. The columns are `a, p, q, f, l, T, m, M` (in that order), with `m` and `M` written as `True` or `False`.
+- **Source:** Binance spot, symbol BTCUSDT, aggregated trades ("aggTrades"). Daily and monthly files are published at data.binance.vision. This project uses the daily files. The CSV files have no header row. The columns are `a, p, q, f, l, T, m, M` (in that order), with `m` and `M` written as `True` or `False`.
 - **Why crypto:** the non-crypto sources with trade-level data cost money. BTC is the single instrument.
 - **Period:** 1 September to 30 November 2025 (UTC), 91 days. Timestamps in files from 2025 on are in **microseconds**.
 - **Split:** chronological. Training is September and October (61 days). Testing is November (30 days).
 - **Why this period:** September 2025 is the calmest month since January 2025. The training months include the 10 October liquidation crash. November has several separate stressed stretches, so the test result does not rest on a single day. In a daily-volatility screen, 14 of the 30 test days were above the training 90th percentile.
-- **Size:** the monthly files total about 1.5 GB compressed. The training period has 31 million events (measured). November is estimated at about 25 million, so the whole period holds about 55 million events. Process the files month by month.
+- **Size:** the script downloads the 91 daily files, which total about 1.5 GB compressed. The training period has 31 million events (measured). November is estimated at about 25 million, so the whole period holds about 55 million events.
 - **Cleaning:** drop records with price 0 or quantity 0. Binance uses these to flag duplicates found in a data audit. Order the remaining records by aggregate trade ID.
 - **Raw record fields** (names as in the Binance API):
 
@@ -107,7 +113,7 @@ Specified in full in [tokeniser-design.md](tokeniser-design.md). In brief:
 - A small causal (decoder-only) transformer, trained with next-token cross-entropy on the training period.
 - **Size:** 6 layers, width 192, 6 attention heads, about 2.8 million parameters. Learned positions, pre-norm layers, GELU, tied input and output embeddings.
 - **Context:** 512 events.
-- **Compute:** the laptop (Intel i5-1038NG7, 4 cores) has no GPU that PyTorch can use, so training runs on CPU. Measured on random tokens: training runs at about 8,400 tokens/s, so one pass over 31 million events takes about 62 minutes. Forward-only scoring runs at about 27,000 tokens/s. One seed takes about 1.5 hours including scoring the test month, and three seeds about 4.7 hours.
+- **Compute:** the laptop (Intel i5-1038NG7, 4 cores) has no GPU that PyTorch can use, so training runs on CPU. Measured on random tokens: training runs at about 8,400 tokens/s, so one pass over 31 million events takes about 62 minutes. Forward-only scoring runs at about 27,000 tokens/s. One seed trains in about 62 minutes, so three seeds take about 3.1 hours. Only the selected seed is scored, which takes about 2 hours. With 15 to 20 minutes of data preparation, the whole run takes about 5 hours.
 - The vocabulary is small, so the output layer is cheap.
 
 ### Training
@@ -193,7 +199,7 @@ Design choices:
 
 | Question | Choice | Reason |
 |---|---|---|
-| Prompt source | A real stretch of data picked by time, or a sequence the user builds by clicking icons | A real stretch shows the model in a calm or a volatile regime. A built sequence lets the user test an idea such as a run of large sells. |
+| Prompt source | A stretch from the committed excerpt file (section 10), or a sequence the user builds by clicking icons. If the full tokenised test month is on disk, any time in it can be picked too. | A real stretch shows the model in a calm or a volatile regime. A built sequence lets the user test an idea such as a run of large sells. |
 | Prompt days | Test-month days only | The model has not seen them. No training day can be mistaken for a memorised one. |
 | Number of continuations | A control, default 1 | A single sample is the simplest view. Several samples show how variable the model is. |
 | Price path | Icons only, no price line | A token holds a move class, not an exact move. A line would need an invented tick value per class. |
@@ -224,7 +230,7 @@ The code is organised so that the script stays short. Each stage lives in its ow
 
 ### Heartbeat
 
-- A background thread reads a shared progress record and prints one line per minute. The same record is written to a status file, so another program (or the GUI) can read it.
+- A background thread reads a shared progress record and prints one line per minute. The same record is written to a status file, so another program can read it.
 - A stage reports its progress as a fraction and its measured rate. Its estimated time to finish comes from that rate.
 - The whole-run estimate adds the estimates for the later stages. Before a stage has started, its estimate is the planned duration from the compute benchmark (about 62 minutes per training pass, about 2 hours of scoring). Once the stage runs, its measured rate replaces the plan.
 
@@ -242,7 +248,7 @@ The script writes these files but does not run `git`. The commit is made by hand
 
 ### The GUI
 
-The generation GUI is not a stage of this script. It is a separate command that reads the trained model and the tokenised data the script produces (see section 9).
+The generation GUI is not a stage of this script. It is a separate command (see section 9). It needs only the files kept in the repo: the weights, the tokeniser and the prompt excerpts. It does not need the downloaded or tokenised data.
 
 ## 11. Open decisions
 
@@ -271,6 +277,9 @@ There are no open decisions. The remaining work is implementation. Two checks ar
 | perplexity | The exponential of the mean surprisal over a window |
 | regime | A stretch of high or low realised volatility |
 | event time | Windows measured in numbers of events, not seconds |
+| token | One integer standing for one event: its side, size bin and price-move class |
+| RV | Realised volatility: the root mean square of the price moves over the last $M$ events |
+| seed | A number that fixes the random initial weights and the data order of one training run |
 
 ## 14. Working agreements for this repo
 

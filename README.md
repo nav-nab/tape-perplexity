@@ -4,36 +4,36 @@
 
 Does a small transformer trained on BTCUSDT trades get more "confused" when the market becomes volatile?
 
-Each trade event becomes a token. A causal transformer learns to predict the next token. We then test whether its perplexity tracks realised volatility. This is a regime detector, not a price predictor.
+Each trade event becomes a token. A causal transformer learns to predict the next token. *Perplexity* measures how surprised the model is by what actually happens next. We test whether the model's perplexity, averaged over a rolling window, rises and falls with realised volatility. This is a regime detector, not a price predictor.
 
-**Status:** design complete. No code yet.
+**Status:** design complete. Implementation has not started, so there is no code to run yet.
+
+## Where to start
+
+Read Part 1 of the [project design](docs/project-design.md) for the question, the method and a pipeline diagram. The other documents hold the details.
 
 ## Docs
 
-- [Project design](docs/project-design.md): the question, the pipeline, the signal and the evaluation.
+- [Project design](docs/project-design.md): the question, the pipeline, the signal, the evaluation, the planned generation GUI and the structure of the code.
 - [Tokeniser design](docs/tokeniser-design.md): how raw Binance trades become tokens.
-- [Token icons](docs/token-icons.md): the visual icon for each token, used in figures and the logo.
+- [Token icons](docs/token-icons.md): the picture for each token, used in figures and the banner above.
 - [Block bootstrap](docs/block-bootstrap.md): how the confidence interval is computed and why.
-- [Design log](docs/design-log.md): decisions as they were made, and what is still open.
+- [Design log](docs/design-log.md): every design decision as it was made.
 
 ## Progress
 
-- [x] Project design
-- [x] Tokeniser design
-- [x] Study period (1 Sep to 30 Nov 2025; train Sep–Oct, test Nov)
-- [x] Volatility measure and window ($M=3000$ events)
-- [x] Surprisal window ($N=M=3000$ events)
-- [x] Regime threshold (90th percentile of training RV)
-- [x] Model and training recipe (medium model, 3 seeds)
-- [x] Test-time scoring (sliding windows, stride 64)
-- [x] Bootstrap block length (1,000,000 events)
-- [x] Token icon style (comet)
-- [x] Code design (single resumable script with a heartbeat; project design section 10)
-- [ ] Implementation: data pipeline, tokeniser, model, scoring, evaluation
-- [ ] Generation GUI (designed, see project design section 9)
-- [ ] Data download and tokeniser implementation
-- [ ] Model training
-- [ ] Evaluation
+Design is complete: all decisions are settled and recorded in the docs above.
+
+Implementation, in the order the single script runs it:
+
+- [ ] Script skeleton: stage runner, 10-minute checkpoints, one-minute heartbeat
+- [ ] Download, clean and merge into events
+- [ ] Tokeniser (fitting and encoding)
+- [ ] Training (three seeds, seed selection)
+- [ ] Scoring the test month
+- [ ] Evaluation (rolling series, correlation, block-bootstrap interval, plots)
+- [ ] Export of the final weights, tokeniser and prompt excerpts
+- [ ] Generation GUI
 
 ## License
 

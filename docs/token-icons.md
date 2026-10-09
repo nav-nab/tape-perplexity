@@ -14,7 +14,7 @@ There are up to 224 icons, one per token (2 sides × 16 sizes × 7 price-move cl
 
 The tail trails behind the dot, as if the dot were moving. A rising price puts the dot high with a tail below it. A falling price puts the dot low with a tail above it. A longer tail is a larger move.
 
-The move classes run from a large fall to a large rise. A fall and a rise of the same magnitude class have the same tail length.
+The move classes are numbered as in the tokeniser encoding ([tokeniser-design.md](tokeniser-design.md), section 7). They run from a large fall to a large rise. A fall and a rise of the same magnitude class have the same tail length.
 
 | Class | 0 | 1 | 2 | 3 | 4 | 5 | 6 |
 |---|---|---|---|---|---|---|---|
