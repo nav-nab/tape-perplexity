@@ -46,6 +46,7 @@ The tail is the dot colour at 50% opacity. The logo tape uses the dark column on
 
 - **Inference figure.** Show a short run of consecutive events as a row of icons, with the model's surprisal for each event underneath. The reader can see what kind of event surprised the model.
 - **Logo.** A tape of 30 to 40 icons. The prototype used a made-up sequence that goes calm, stress, calm. Stress shows as larger dots, longer tails and more switching between blue and orange. A real sequence from the test month could replace it.
+- **README banner.** `docs/assets/tape.svg` is a paper ticker tape of 21 icons, 800 px wide, shown at the top of the README. It is a generated figure from a made-up calm, stress, calm sequence.
 - **Key.** Two $16\times7$ grids, one per side, document the full vocabulary. Rows are size bins and columns are move classes.
 
 ## Notes

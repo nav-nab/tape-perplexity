@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/tape.svg" alt="A paper ticker tape of trade tokens: calm, then a volatile stretch, then calm" width="800"></p>
+
 # tape-perplexity
 
 Does a small transformer trained on BTCUSDT trades get more "confused" when the market becomes volatile?
