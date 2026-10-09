@@ -28,6 +28,7 @@ Each trade event becomes a token. A causal transformer learns to predict the nex
 - [x] Test-time scoring (sliding windows, stride 64)
 - [x] Bootstrap block length (1,000,000 events)
 - [x] Token icon style (comet)
+- [x] Code design (single resumable script with a heartbeat; project design section 10)
 - [ ] Implementation: data pipeline, tokeniser, model, scoring, evaluation
 - [ ] Generation GUI (designed, see project design section 9)
 - [ ] Data download and tokeniser implementation

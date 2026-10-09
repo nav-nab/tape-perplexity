@@ -202,14 +202,44 @@ Design choices:
 | Front end | A local server with a browser front end | The icons are SVG, so a browser draws them natively. |
 | Code boundary | A separate module that imports the tokeniser and model code | The GUI then cannot alter the study pipeline. |
 
-## 10. Open decisions
+## 10. Code structure and run behaviour
+
+The whole study runs from one script. Three behaviours are required of it.
+
+- **One command.** A single script runs the full workflow in order: download, clean and merge, tokenise, train the three seeds, select the seed, score the test month, and evaluate.
+- **Checkpoints every 10 minutes of wall time.** The run can be interrupted at any point and resumed by running the same command again.
+- **A heartbeat every minute.** Each line gives the current stage, its progress and the estimated time to finish the whole run.
+
+The code is organised so that the script stays short. Each stage lives in its own module, and the script only calls the stages in order. Every module, function and non-obvious step carries a comment that explains why it is done, not only what it does.
+
+### Resuming
+
+- A finished stage leaves a completion marker and its output files. A rerun skips it.
+- Long stages (training and scoring) also write a checkpoint every 10 minutes. A training checkpoint holds the model weights, the optimiser state, the position in the learning-rate schedule, the position in the shuffled data, and the random-number state. A scoring checkpoint holds the position in the test stream and the surprisals computed so far.
+- Short stages resume from the last finished unit. Downloading, for example, resumes from the last complete daily file.
+- Files are written to a temporary name and then renamed, so an interruption never leaves a half-written checkpoint.
+- Interrupt and termination signals trigger one last checkpoint before the script exits.
+- Each checkpoint records a fingerprint of the settings. If the settings have changed, the script refuses to resume, because the old state would no longer match.
+- A resumed run reproduces the uninterrupted run, up to small floating-point differences, because the data order and random numbers are fixed by the seed.
+
+### Heartbeat
+
+- A background thread reads a shared progress record and prints one line per minute. The same record is written to a status file, so another program (or the GUI) can read it.
+- A stage reports its progress as a fraction and its measured rate. Its estimated time to finish comes from that rate.
+- The whole-run estimate adds the estimates for the later stages. Before a stage has started, its estimate is the planned duration from the compute benchmark (about 62 minutes per training pass, about 2 hours of scoring). Once the stage runs, its measured rate replaces the plan.
+
+### The GUI
+
+The generation GUI is not a stage of this script. It is a separate command that reads the trained model and the tokenised data the script produces (see section 9).
+
+## 11. Open decisions
 
 There are no open decisions. The remaining work is implementation. Two checks are planned for when a model exists:
 
 - Repeat the dependence check for the block length on the surprisal series of the training period (see [block-bootstrap.md](block-bootstrap.md)).
 - Read the loss by position within a chunk during training, to confirm that a stride of 64 gives scored events a consistent amount of history.
 
-## 11. Design rationale
+## 12. Design rationale
 
 - **Why tokens are trade events.** A token describes who was aggressive, how large the trade was and how far the price moved. This is richer than a price or return level.
 - **Why no time fields.** The model is not told how long passed between events. Its only evidence about the regime is the content of the trade sequence.
@@ -217,7 +247,7 @@ There are no open decisions. The remaining work is implementation. Two checks ar
 - **Why event time.** The token stream has no clock. Measuring the windows in events keeps the signal and the target on the same footing.
 - **Why a chronological split.** A random split would leak future information into training.
 
-## 12. Glossary
+## 13. Glossary
 
 | Term | Meaning |
 |---|---|
@@ -230,7 +260,7 @@ There are no open decisions. The remaining work is implementation. Two checks ar
 | regime | A stretch of high or low realised volatility |
 | event time | Windows measured in numbers of events, not seconds |
 
-## 13. Working agreements for this repo
+## 14. Working agreements for this repo
 
 - Commit locally after any substantive change. The owner pushes to the remote.
 - Design decisions are logged in [design-log.md](design-log.md) as they are made.
