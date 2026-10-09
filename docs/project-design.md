@@ -72,7 +72,7 @@ Left out by default:
 
 ## 3. Data
 
-- **Source:** Binance spot, symbol BTCUSDT, aggregated trades ("aggTrades"). Daily and monthly files are published at data.binance.vision. Check the column order of the files when loading them.
+- **Source:** Binance spot, symbol BTCUSDT, aggregated trades ("aggTrades"). Daily and monthly files are published at data.binance.vision. The CSV files have no header row. The columns are `a, p, q, f, l, T, m, M` (in that order), with `m` and `M` written as `True` or `False`.
 - **Why crypto:** the non-crypto sources with trade-level data cost money. BTC is the single instrument.
 - **Period:** 1 September to 30 November 2025 (UTC), 91 days. Timestamps in files from 2025 on are in **microseconds**.
 - **Split:** chronological. Training is September and October (61 days). Testing is November (30 days).
