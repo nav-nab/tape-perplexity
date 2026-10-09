@@ -45,10 +45,10 @@ This file mirrors the running design log kept in the Claude project memory (`ind
 - Evaluation: plot perplexity against realised volatility over time, report the correlation on the test period, block-bootstrap confidence interval. Settled: moving blocks of 1,000,000 events (about one trading day, about 25 blocks in the test month), 2,000 replicates. Reason: on the training period the autocorrelation of log RV is still 0.15 to 0.20 at 1,000,000 events, and the bootstrap standard error keeps growing with block length (83 times the independence value at 1,000,000 events), so short blocks would be far too confident. The dependence check is to be repeated on the surprisal series once a model exists.
 - Left out by default: lead tests, GARCH or trade-intensity baselines, order book data, multiple architectures or token schemes.
 - Token icons settled: every token has an icon in the "comet" style (colour = side, dot radius = size bin, tail = price move). The tail length is measured beyond the dot edge, so the same move has the same visible tail at every size. Specification in `docs/token-icons.md`. Used for the inference figure and a logo tape. Candle, heat tile and depth bar styles were prototyped and rejected.
-- Inference GUI planned as part of the coding work: icon tape with surprisal, next-token view, signal panel. It is a demonstration tool outside the claim under test. Its details are open (data source, live versus precomputed model, technology, interactivity, code boundary); see project design section 9.
+- Generation GUI planned as part of the coding work: the user gives a starting sequence of events and the model generates new tokens autoregressively, shown as icons. The GUI does not compute surprisal. It is a demonstration tool outside the claim under test. Its details are open (prompt source, comparison with the real continuation, number of samples, price path, sampling controls, where the model runs, front end, code boundary); see project design section 9.
 
 ## Open decisions
 
 - Study design: none. All design decisions are settled.
-- Inference GUI: data source, where the model runs, technology, interactivity, code boundary (project design section 9 lists options and suggested defaults).
+- Generation GUI: prompt source, prompt days, comparison with reality, number of samples, price path, sampling controls, where the model runs, front end, code boundary (project design section 9 lists options and suggested defaults).
 - Tokeniser: all decisions settled (1 to 5).

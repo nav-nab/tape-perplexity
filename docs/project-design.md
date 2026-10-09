@@ -178,29 +178,33 @@ $$
 - Give a **block-bootstrap confidence interval**, because consecutive events are strongly dependent. The method and the evidence for the block length are in [block-bootstrap.md](block-bootstrap.md). The block length is 1,000,000 events (about one trading day), with about 25 blocks in the test month.
 - No other statistics are planned (see section 2).
 
-## 9. Inference GUI (planned)
+## 9. Generation GUI (planned)
 
-An inference GUI is built alongside the code. It lets a reader see the model at work on real trades. It is a demonstration and exploration tool. It is not part of the claim under test, so it must not change any result.
+A GUI is built alongside the code. The user supplies a starting sequence of events, and the trained model generates new events one at a time, as a language model continues a sentence. Each generated token is sampled from the model's predicted distribution and appended to the sequence. The GUI scores nothing. It is a demonstration and exploration tool outside the claim under test, so it must not change any result.
 
 Intended contents:
 
-- **Icon tape.** A scrollable row of the token icons (see [token-icons.md](token-icons.md)), one per event, with each event's surprisal underneath.
-- **Next-token view.** For the selected event, the model's most likely next tokens, shown as icons with their probabilities.
-- **Signal panel.** The rolling perplexity and the realised volatility over the same events, with the regime flag shaded.
+- **Prompt tape.** A row of token icons (see [token-icons.md](token-icons.md)) for the starting sequence. It holds up to 511 events, so the model always has room to produce one more.
+- **Generated tape.** The sampled events continue the row. They are drawn apart from the prompt, for example behind a divider and with a tinted background, so the reader can see where the real data ends.
+- **Controls.** The number of events to generate, the sampling temperature, and a random seed.
 
 The details below are not yet decided.
 
 | Question | Options | Suggested default |
 |---|---|---|
-| Data source | Replay of recorded test-month data, or a live Binance feed | Replay. A live feed needs the same event-merge logic online, and adds nothing to the write-up. |
-| Where the model runs | Live in the app, or precomputed surprisals read from a file | Both. Precomputed series for the signal panel, because scoring the month takes hours. A live forward pass for the tape and next-token view, because one 512-event window is small. |
-| Technology | A Python web app (Streamlit or Gradio), a local server with a browser front end, or a static page with exported data | A local server with a browser front end. The icons are SVG, so a browser draws them natively. A static export is a good later step for sharing. |
-| Interactivity | View only, or the user can also build a sequence by clicking icons | View only at first. Clickable sequences are a natural extension. |
-| Code boundary | Inside the main package, or a separate module | A separate module that imports the tokeniser, model and scoring code. The GUI then cannot alter the study pipeline. |
+| Prompt source | A real stretch of data picked by time, a sequence the user builds by clicking icons, or both | Both. A real stretch shows the model in a calm or a volatile regime. A built sequence lets the user test a hypothesis such as a run of large sells. |
+| Prompt data | Test month only, or any day of the study period | Any day, with a label showing whether the day was in training or testing. Prompts from training days show what the model has memorised, so the label matters. |
+| Comparison with reality | Generated events only, or the real continuation shown beneath them | Show the real continuation beneath, when the prompt comes from data. The model is not expected to match it, but the contrast in dot size and tail length is informative. |
+| Number of continuations | One, or several side by side | Several (about five). A single sample hides how variable the model is. |
+| Price path | Icons only, or also a price line | Icons only. A token holds a move class, not an exact move, so a line would need an invented tick value for each class, and that adds a modelling choice to explain. |
+| Sampling controls | Temperature only, or also top-k or top-p | Temperature only. It is enough to show the model's spread. |
+| Where the model runs | In a Python process, or in the browser | A Python process on the laptop. The model is small, so generating a few hundred events is quick on the CPU. Running in the browser (for example via ONNX) is a later option for sharing. |
+| Front end | A Python app (Streamlit or Gradio), or a local server with a browser front end | A local server with a browser front end. The icons are SVG, so a browser draws them natively. |
+| Code boundary | Inside the main package, or a separate module | A separate module that imports the tokeniser and model code. The GUI then cannot alter the study pipeline. |
 
 ## 10. Open decisions
 
-The study design has no open decisions. The GUI details in section 9 are open. The remaining work is implementation. Two checks are planned for when a model exists:
+The study design has no open decisions. The generation GUI details in section 9 are open. The remaining work is implementation. Two checks are planned for when a model exists:
 
 - Repeat the dependence check for the block length on the surprisal series of the training period (see [block-bootstrap.md](block-bootstrap.md)).
 - Read the loss by position within a chunk during training, to confirm that a stride of 64 gives scored events a consistent amount of history.
