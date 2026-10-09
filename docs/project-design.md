@@ -138,6 +138,15 @@ The **perplexity** is $\exp(S_t)$. The exponential is monotonic, so plots and co
 
 The window is $N=M=3000$ events. Both series then summarise exactly the same events, both are trailing windows ending at the same event, and there is no separate parameter to tune. If the surprisal series later proves much noisier than $\mathrm{RV}$, $N$ could be revisited using training data only.
 
+### Scoring the test month
+
+Every test event gets a surprisal from the frozen model, given the events just before it.
+
+- **Why not plain chunks.** The model reads at most 512 events. If the test stream were cut into plain 512-event chunks, the first event of each chunk would have no history and the last would have 511. Surprisal falls as history grows, so the series would show a spurious sawtooth with a period of 512 events.
+- **Sliding windows.** A 512-event window slides over the test stream with a **stride of 64** events. In each window, only the last 64 events are scored. Every scored event therefore has between 448 and 511 events of history. A stride of 1 would give exactly 511 for every event, but would take about 5.5 days on the laptop.
+- **Month boundary.** The stream is continuous across the boundary between October and November. The first November events take their history from the last 511 October events. Those October events are context only and are not scored.
+- **Cost.** About 200 million token-forwards for November, estimated at about 2 hours on the laptop CPU (range 2 to 3 hours). Only the selected model is scored.
+
 ## 7. The regime (volatility) signal
 
 - Volatility is **realised volatility over the last $M=3000$ events**. Windows are in *event time*, not clock time. This matches the token stream, which also has no clock.
@@ -173,7 +182,6 @@ $$
 
 | Decision | Notes |
 |---|---|
-| Test-time scoring | How much context each scored test event gets |
 | Bootstrap block length | Not yet discussed |
 
 ## 10. Design rationale

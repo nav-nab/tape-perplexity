@@ -38,6 +38,7 @@ This file mirrors the running design log kept in the Claude project memory (`ind
 
 - Small causal transformer trained for next-token prediction.
 - Model settled: medium, 6 layers, width 192, 6 heads, about 2.8M parameters, context 512 events. Three seeds (0, 1, 2) with one recipe. One model, chosen by the lowest final training loss (not by anything from the test month), is used for all surprisal results. The other seeds check that the losses are similar. Reason: the laptop is CPU-only (Intel i5-1038NG7, 4 cores); measured about 62 minutes per training pass and about 1.5 hours per seed including scoring, so about 4.7 hours for three seeds.
+- Test-time scoring settled: sliding 512-event windows over the test stream with a stride of 64, scoring only the last 64 events of each window, so every scored event has 448 to 511 events of history (stride 1 would take about 5.5 days). The first November events take their history from the last 511 October events, which are context only. Estimated cost about 2 hours on the laptop CPU (25 million events, range 2 to 3 hours); only the selected model is scored.
 - Training settled: one pass over the training stream, no separate validation set (each batch is new data), non-overlapping shuffled chunks of 512 events, AdamW with peak learning rate 1e-3, warm-up and cosine decay, weight decay 0.1, gradient clipping 1.0, about 16,000 tokens per step, no dropout, weights frozen for the test month.
 - Primary signal: rolling mean surprisal over the last $N$ events (perplexity). Settled: $N=M=3000$, so both series summarise the same events with no extra tuned parameter.
 - Volatility measure settled: root mean square of the per-event tick moves over the last $M$ events (plain realised volatility in event time). No jump-robust or noise-corrected variants. $M=3000$ events settled, chosen on 23 training days: one large sweep supplies 5 to 8% of a window's variance, a window spans about 12 minutes on a calm day, and adjacent windows agree with correlation about 0.6 (median 0.61) in log RV. Regime threshold settled: the 90th percentile of RV over all training events (about 251 ticks in a check on the 61 training days). The 10 October crash supplies 45% of flagged events (threshold would be about 222 ticks without it; it is kept). The flag is used for shading in plots and does not enter the headline correlation.
@@ -46,5 +47,5 @@ This file mirrors the running design log kept in the Claude project memory (`ind
 
 ## Open decisions
 
-- Project level: test-time scoring, bootstrap block length.
+- Project level: bootstrap block length.
 - Tokeniser: all decisions settled (1 to 5).
