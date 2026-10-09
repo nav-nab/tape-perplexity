@@ -20,7 +20,8 @@ Each trade event becomes a token. A causal transformer learns to predict the nex
 - [x] Volatility measure and window ($M=3000$ events)
 - [x] Surprisal window ($N=M=3000$ events)
 - [x] Regime threshold (90th percentile of training RV)
-- [ ] Model size, training settings and bootstrap block length
+- [x] Model and training recipe (medium model, 3 seeds)
+- [ ] Test-time scoring and bootstrap block length
 - [ ] Data download and tokeniser implementation
 - [ ] Model training
 - [ ] Evaluation

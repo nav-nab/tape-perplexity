@@ -105,7 +105,9 @@ Specified in full in [tokeniser-design.md](tokeniser-design.md). In brief:
 ## 5. Model
 
 - A small causal (decoder-only) transformer, trained with next-token cross-entropy on the training period.
-- Model size, context length and optimiser settings are not yet decided. They should be small enough for a laptop-scale budget.
+- **Size:** 6 layers, width 192, 6 attention heads, about 2.8 million parameters. Learned positions, pre-norm layers, GELU, tied input and output embeddings.
+- **Context:** 512 events.
+- **Compute:** the laptop (Intel i5-1038NG7, 4 cores) has no GPU that PyTorch can use, so training runs on CPU. Measured on random tokens: training runs at about 8,400 tokens/s, so one pass over 31 million events takes about 62 minutes. Forward-only scoring runs at about 27,000 tokens/s. One seed takes about 1.5 hours including scoring the test month, and three seeds about 4.7 hours.
 - The vocabulary is small, so the output layer is cheap.
 
 ### Training
@@ -115,7 +117,8 @@ Specified in full in [tokeniser-design.md](tokeniser-design.md). In brief:
 - **Batches:** the training stream is cut into non-overlapping chunks of 512 events, and the chunks are shuffled. Each event is a prediction target once. Price moves are computed over the whole stream beforehand, not reset at chunk starts. The daily files join into one continuous stream, because the market is open 24/7.
 - **Optimiser (standard defaults):** AdamW, peak learning rate $10^{-3}$ with a short warm-up and cosine decay to 10% of the peak, weight decay 0.1, gradient clipping at 1.0, about 16,000 tokens per step (about 1,900 steps per pass). No dropout.
 - **Frozen model:** after training, the weights stay fixed for the whole test month.
-- **Seeds:** under discussion.
+- **Seeds:** three (0, 1 and 2). They share one recipe, and differ only in initial weights and chunk order.
+- **Which model is used for the results:** one model, the seed with the lowest final training loss, is used for all surprisal results. The final training loss is the mean over the last part of the pass. It is a fair held-out estimate, because every batch in a single pass is new data. Choosing by training loss keeps the test month out of the choice. The other two seeds serve as a check that the loss is similar. If the three losses differ noticeably, that is discussed before going further.
 
 ## 6. The perplexity signal
 
@@ -170,8 +173,7 @@ $$
 
 | Decision | Notes |
 |---|---|
-| Model size | Deferred. Small (4 layers, width 128, about 0.9M parameters) or medium (6 layers, width 192, about 2.8M). A context of 512 events is proposed. |
-| Number of random seeds | Under discussion; three seeds are proposed |
+| Test-time scoring | How much context each scored test event gets |
 | Bootstrap block length | Not yet discussed |
 
 ## 10. Design rationale
