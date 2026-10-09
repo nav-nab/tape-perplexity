@@ -77,7 +77,7 @@ Left out by default:
 - **Period:** 1 September to 30 November 2025 (UTC), 91 days. Timestamps in files from 2025 on are in **microseconds**.
 - **Split:** chronological. Training is September and October (61 days). Testing is November (30 days).
 - **Why this period:** September 2025 is the calmest month since January 2025. The training months include the 10 October liquidation crash. November has several separate stressed stretches, so the test result does not rest on a single day. In a daily-volatility screen, 14 of the 30 test days were above the training 90th percentile.
-- **Size:** the monthly files total about 1.5 GB compressed. A rough estimate is 100 to 125 million events. Process the files month by month.
+- **Size:** the monthly files total about 1.5 GB compressed. The training period has 31 million events (measured). November is estimated at about 25 million, so the whole period holds about 55 million events. Process the files month by month.
 - **Cleaning:** drop records with price 0 or quantity 0. Binance uses these to flag duplicates found in a data audit. Order the remaining records by aggregate trade ID.
 - **Raw record fields** (names as in the Binance API):
 
