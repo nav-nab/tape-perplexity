@@ -44,5 +44,5 @@ This file mirrors the running design log kept in the Claude project memory (`ind
 
 ## Open decisions
 
-- Project level: model size and training settings, bootstrap block length.
+- Project level: model size (deferred; small about 0.9M or medium about 2.8M parameters; context 512 proposed, not confirmed), training settings, test-time scoring, bootstrap block length.
 - Tokeniser: all decisions settled (1 to 5).

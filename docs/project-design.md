@@ -161,7 +161,8 @@ $$
 
 | Decision | Notes |
 |---|---|
-| Model size and training settings | Not yet discussed |
+| Model size | Deferred. Small (4 layers, width 128, about 0.9M parameters) or medium (6 layers, width 192, about 2.8M). A context of 512 events is proposed. |
+| Training settings | Under discussion |
 | Bootstrap block length | Not yet discussed |
 
 ## 10. Design rationale
