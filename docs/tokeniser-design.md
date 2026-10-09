@@ -109,7 +109,9 @@ Size is measured in **BTC**, the native unit of the data and of order book depth
 
 Size bin edges are fixed constants on a log scale, 3 bins per decade:
 
-$$ e_k = 5\times10^{-5}\cdot 10^{k/3}\ \text{BTC},\qquad k=1,\dots,15. $$
+$$
+e_k = 5\times10^{-5}\cdot 10^{k/3}\ \text{BTC},\qquad k=1,\dots,15.
+$$
 
 The starting value $5\times10^{-5}$ BTC is roughly the BTC value of the 5 USDT minimum notional (about $6\times10^{-5}$ BTC at 82,000 USDT). The 15 edges give 16 bins:
 
@@ -172,7 +174,9 @@ Three separate questions define this field.
 
 The move of event $t$ compares the last fill price of event $t$ with the last fill price of event $t-1$:
 
-$$ \Delta P_t = P^{\text{last}}_t - P^{\text{last}}_{t-1}. $$
+$$
+\Delta P_t = P^{\text{last}}_t - P^{\text{last}}_{t-1}.
+$$
 
 An event can contain several fills at rising or falling prices. Using the last fill captures the whole impact of the order. Using the previous event's last fill also captures any gap between the two events.
 
@@ -180,7 +184,9 @@ An event can contain several fills at rising or falling prices. Using the last f
 
 The difference is divided by the tick size, so the move is a whole number of ticks:
 
-$$ \Delta_t = \frac{\Delta P_t}{0.01}. $$
+$$
+\Delta_t = \frac{\Delta P_t}{0.01}.
+$$
 
 Basis points (a percentage of price) were the alternative. Ticks were chosen because a tick is the smallest possible price step, so the result is an exact integer with no rounding.
 
@@ -205,7 +211,9 @@ Why bin 1 is exactly one tick: it is the smallest nonzero move. In the live samp
 
 Let $S$ be the number of size bins after the tail rule. Number the sides $0$ to $1$, the size bins $0$ to $S-1$ and the move classes $0$ to $6$. The token ID is
 
-$$ \text{id} = (\text{side}\cdot S + \text{size}) \cdot 7 + \text{move}. $$
+$$
+\text{id} = (\text{side}\cdot S + \text{size}) \cdot 7 + \text{move}.
+$$
 
 The vocabulary has $2\cdot S\cdot 7 \le 224$ tokens. The model uses a single softmax over this set, with no separate head per field.
 

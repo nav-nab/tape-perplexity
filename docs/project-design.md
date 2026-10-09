@@ -108,13 +108,17 @@ Specified in full in [tokeniser-design.md](tokeniser-design.md). In brief:
 
 ## 6. The perplexity signal
 
-For event $t$ with token $x_t$ and past tokens $x_{<t}$, the **surprisal** is
+For event $t$ with token $x_t$ and past tokens $x_{\lt t}$, the **surprisal** is
 
-$$ s_t = -\log p_\theta(x_t \mid x_{<t}). $$
+$$
+s_t = -\log p_\theta(x_t \mid x_{\lt t}).
+$$
 
 The **rolling mean surprisal** over the last $N$ events is
 
-$$ S_t = \frac{1}{N}\sum_{i=0}^{N-1} s_{t-i}. $$
+$$
+S_t = \frac{1}{N}\sum_{i=0}^{N-1} s_{t-i}.
+$$
 
 The **perplexity** is $\exp(S_t)$. The exponential is monotonic, so plots and correlations can use $S_t$ directly.
 
