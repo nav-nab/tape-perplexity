@@ -175,7 +175,7 @@ $$
 
 - Plot the perplexity series against realised volatility over the test period.
 - Report the correlation between them on the test period.
-- Give a **block-bootstrap confidence interval**, because consecutive events are strongly dependent. The block length is open.
+- Give a **block-bootstrap confidence interval**, because consecutive events are strongly dependent. The method and the evidence for the block length are in [block-bootstrap.md](block-bootstrap.md). The proposed block length is 1,000,000 events (about one trading day), pending confirmation.
 - No other statistics are planned (see section 2).
 
 ## 9. Open decisions

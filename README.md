@@ -10,6 +10,7 @@ Each trade event becomes a token. A causal transformer learns to predict the nex
 
 - [Project design](docs/project-design.md): the question, the pipeline, the signal and the evaluation.
 - [Tokeniser design](docs/tokeniser-design.md): how raw Binance trades become tokens.
+- [Block bootstrap](docs/block-bootstrap.md): how the confidence interval is computed and why.
 - [Design log](docs/design-log.md): decisions as they were made, and what is still open.
 
 ## Progress
