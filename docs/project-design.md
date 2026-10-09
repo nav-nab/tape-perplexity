@@ -1,6 +1,6 @@
 # Tape Perplexity: project design
 
-**Status (2026-10-09):** design stage, no code yet. The tokeniser is fully specified in [tokeniser-design.md](tokeniser-design.md). The study dates, the two window lengths, the regime threshold and the model settings are still open (see [section 9](#9-open-decisions)).
+**Status (2026-10-09):** design stage, no code yet. The tokeniser is fully specified in [tokeniser-design.md](tokeniser-design.md). The two window lengths, the regime threshold and the model settings are still open (see [section 9](#9-open-decisions)).
 
 Part 1 is a short overview. Part 2 holds the detailed design notes.
 
@@ -74,8 +74,10 @@ Left out by default:
 
 - **Source:** Binance spot, symbol BTCUSDT, aggregated trades ("aggTrades"). Daily and monthly files are published at data.binance.vision. Check the column order of the files when loading them.
 - **Why crypto:** the non-crypto sources with trade-level data cost money. BTC is the single instrument.
-- **Period:** one contiguous stretch of 2 to 3 months, from 2025 onward. It should contain both calm and stressed stretches. Timestamps in files from 2025 on are in **microseconds**. The exact dates are open.
-- **Split:** chronological. Training strictly precedes testing.
+- **Period:** 1 September to 30 November 2025 (UTC), 91 days. Timestamps in files from 2025 on are in **microseconds**.
+- **Split:** chronological. Training is September and October (61 days). Testing is November (30 days).
+- **Why this period:** September 2025 is the calmest month since January 2025. The training months include the 10 October liquidation crash. November has several separate stressed stretches, so the test result does not rest on a single day. In a daily-volatility screen, 14 of the 30 test days were above the training 90th percentile.
+- **Size:** the monthly files total about 1.5 GB compressed. A rough estimate is 100 to 125 million events. Process the files month by month.
 - **Cleaning:** drop records with price 0 or quantity 0. Binance uses these to flag duplicates found in a data audit. Order the remaining records by aggregate trade ID.
 - **Raw record fields** (names as in the Binance API):
 
@@ -141,7 +143,6 @@ The window $N$ trades noise (small $N$) against lag (large $N$). It is open.
 
 | Decision | Notes |
 |---|---|
-| Study dates | 2 to 3 months from 2025 onward, with calm and stressed stretches. Fixes how much data $N$ and $M$ can be chosen from. |
 | Surprisal window $N$ | Noise versus lag |
 | Volatility window $M$ and estimator | Event-time window |
 | Regime threshold | Candidate: training 90th percentile |

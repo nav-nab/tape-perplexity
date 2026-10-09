@@ -17,9 +17,9 @@ This file mirrors the running design log kept in the Claude project memory (`ind
 ## Data
 
 - Binance spot BTCUSDT aggregated trades (data.binance.vision). Crypto was chosen because the non-crypto options cost money.
-- One contiguous period of 2 to 3 months, from 2025 onwards (timestamps in microseconds), containing both calm and stressed stretches. Exact dates still open.
+- Study period settled: 1 September to 30 November 2025 (UTC), timestamps in microseconds. Chronological split: September and October for training (61 days), November for testing (30 days). Reason: September is very calm, the training months include the 10 October crash, and November has several separate stressed stretches (14 of 30 test days above the training 90th percentile of a daily volatility proxy).
 - Records with zero price or zero quantity are dropped.
-- Chronological split, training strictly before testing.
+- Training strictly before testing.
 
 ## Tokeniser
 
@@ -44,5 +44,5 @@ This file mirrors the running design log kept in the Claude project memory (`ind
 
 ## Open decisions
 
-- Project level: $N$ (surprisal window), $M$ (volatility window), regime threshold, exact dates.
+- Project level: $N$ (surprisal window), $M$ (volatility window), regime threshold.
 - Tokeniser: all decisions settled (1 to 5).
