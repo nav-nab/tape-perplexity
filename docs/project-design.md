@@ -124,7 +124,7 @@ $$
 
 The **perplexity** is $\exp(S_t)$. The exponential is monotonic, so plots and correlations can use $S_t$ directly.
 
-The window $N$ trades noise (small $N$) against lag (large $N$). It is open.
+The window is $N=M=3000$ events. Both series then summarise exactly the same events, both are trailing windows ending at the same event, and there is no separate parameter to tune. If the surprisal series later proves much noisier than $\mathrm{RV}$, $N$ could be revisited using training data only.
 
 ## 7. The regime (volatility) signal
 
@@ -138,7 +138,6 @@ $$
   where $\Delta_t$ is the price move of event $t$ (see the tokeniser design). The squared moves average to an estimate of the variance of a price move. Large sweeps count as high volatility, which is intended for a crash regime.
 - Bid-ask bounce adds a roughly constant offset to $\mathrm{RV}_t$, and heavy-tailed moves make it noisy. Both are accepted as properties of the setup.
 - A **high-volatility regime** is a threshold on realised volatility. The candidate threshold is the 90th percentile of the training period.
-
 - **Why $M=3000$.** It was chosen on 23 training days (none from the test month).
   - Below about 1000, one large sweep supplies a large share of a window's variance.
   - At 3000, the largest single event contributes about 5 to 8% of a window.
@@ -157,7 +156,6 @@ $$
 
 | Decision | Notes |
 |---|---|
-| Surprisal window $N$ | Noise versus lag |
 | Regime threshold | Candidate: training 90th percentile |
 | Model size and training settings | Not yet discussed |
 | Bootstrap block length | Not yet discussed |

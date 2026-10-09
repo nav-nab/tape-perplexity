@@ -18,7 +18,8 @@ Each trade event becomes a token. A causal transformer learns to predict the nex
 - [x] Tokeniser design
 - [x] Study period (1 Sep to 30 Nov 2025; train Sep–Oct, test Nov)
 - [x] Volatility measure and window ($M=3000$ events)
-- [ ] Surprisal window and regime threshold
+- [x] Surprisal window ($N=M=3000$ events)
+- [ ] Regime threshold
 - [ ] Data download and tokeniser implementation
 - [ ] Model training
 - [ ] Evaluation
