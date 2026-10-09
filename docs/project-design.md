@@ -178,14 +178,34 @@ $$
 - Give a **block-bootstrap confidence interval**, because consecutive events are strongly dependent. The method and the evidence for the block length are in [block-bootstrap.md](block-bootstrap.md). The block length is 1,000,000 events (about one trading day), with about 25 blocks in the test month.
 - No other statistics are planned (see section 2).
 
-## 9. Open decisions
+## 9. Inference GUI (planned)
 
-None. The remaining work is implementation. Two checks are planned for when a model exists:
+An inference GUI is built alongside the code. It lets a reader see the model at work on real trades. It is a demonstration and exploration tool. It is not part of the claim under test, so it must not change any result.
+
+Intended contents:
+
+- **Icon tape.** A scrollable row of the token icons (see [token-icons.md](token-icons.md)), one per event, with each event's surprisal underneath.
+- **Next-token view.** For the selected event, the model's most likely next tokens, shown as icons with their probabilities.
+- **Signal panel.** The rolling perplexity and the realised volatility over the same events, with the regime flag shaded.
+
+The details below are not yet decided.
+
+| Question | Options | Suggested default |
+|---|---|---|
+| Data source | Replay of recorded test-month data, or a live Binance feed | Replay. A live feed needs the same event-merge logic online, and adds nothing to the write-up. |
+| Where the model runs | Live in the app, or precomputed surprisals read from a file | Both. Precomputed series for the signal panel, because scoring the month takes hours. A live forward pass for the tape and next-token view, because one 512-event window is small. |
+| Technology | A Python web app (Streamlit or Gradio), a local server with a browser front end, or a static page with exported data | A local server with a browser front end. The icons are SVG, so a browser draws them natively. A static export is a good later step for sharing. |
+| Interactivity | View only, or the user can also build a sequence by clicking icons | View only at first. Clickable sequences are a natural extension. |
+| Code boundary | Inside the main package, or a separate module | A separate module that imports the tokeniser, model and scoring code. The GUI then cannot alter the study pipeline. |
+
+## 10. Open decisions
+
+The study design has no open decisions. The GUI details in section 9 are open. The remaining work is implementation. Two checks are planned for when a model exists:
 
 - Repeat the dependence check for the block length on the surprisal series of the training period (see [block-bootstrap.md](block-bootstrap.md)).
 - Read the loss by position within a chunk during training, to confirm that a stride of 64 gives scored events a consistent amount of history.
 
-## 10. Design rationale
+## 11. Design rationale
 
 - **Why tokens are trade events.** A token describes who was aggressive, how large the trade was and how far the price moved. This is richer than a price or return level.
 - **Why no time fields.** The model is not told how long passed between events. Its only evidence about the regime is the content of the trade sequence.
@@ -193,7 +213,7 @@ None. The remaining work is implementation. Two checks are planned for when a mo
 - **Why event time.** The token stream has no clock. Measuring the windows in events keeps the signal and the target on the same footing.
 - **Why a chronological split.** A random split would leak future information into training.
 
-## 11. Glossary
+## 12. Glossary
 
 | Term | Meaning |
 |---|---|
@@ -206,7 +226,7 @@ None. The remaining work is implementation. Two checks are planned for when a mo
 | regime | A stretch of high or low realised volatility |
 | event time | Windows measured in numbers of events, not seconds |
 
-## 12. Working agreements for this repo
+## 13. Working agreements for this repo
 
 - Commit locally after any substantive change. The owner pushes to the remote.
 - Design decisions are logged in [design-log.md](design-log.md) as they are made.
