@@ -182,29 +182,29 @@ $$
 
 A GUI is built alongside the code. The user supplies a starting sequence of events, and the trained model generates new events one at a time, as a language model continues a sentence. Each generated token is sampled from the model's predicted distribution and appended to the sequence. The GUI scores nothing. It is a demonstration and exploration tool outside the claim under test, so it must not change any result.
 
-Intended contents:
+Contents:
 
 - **Prompt tape.** A row of token icons (see [token-icons.md](token-icons.md)) for the starting sequence. It holds up to 511 events, so the model always has room to produce one more.
-- **Generated tape.** The sampled events continue the row. They are drawn apart from the prompt, for example behind a divider and with a tinted background, so the reader can see where the real data ends.
-- **Controls.** The number of events to generate, the sampling temperature, and a random seed.
+- **Generated tape.** The sampled events continue the row. They are drawn apart from the prompt, behind a divider and with a tinted background, so the reader can see where the real data ends.
+- **Real continuation.** When the prompt comes from data, the events that actually followed are shown beneath the generated ones. The model is not expected to match them. The contrast in dot size and tail length is the point.
+- **Controls.** The number of events to generate, the sampling temperature, the number of continuations (default 1, shown side by side when higher), and a random seed.
 
-The details below are not yet decided.
+Design choices:
 
-| Question | Options | Suggested default |
+| Question | Choice | Reason |
 |---|---|---|
-| Prompt source | A real stretch of data picked by time, a sequence the user builds by clicking icons, or both | Both. A real stretch shows the model in a calm or a volatile regime. A built sequence lets the user test a hypothesis such as a run of large sells. |
-| Prompt data | Test month only, or any day of the study period | Any day, with a label showing whether the day was in training or testing. Prompts from training days show what the model has memorised, so the label matters. |
-| Comparison with reality | Generated events only, or the real continuation shown beneath them | Show the real continuation beneath, when the prompt comes from data. The model is not expected to match it, but the contrast in dot size and tail length is informative. |
-| Number of continuations | One, or several side by side | Several (about five). A single sample hides how variable the model is. |
-| Price path | Icons only, or also a price line | Icons only. A token holds a move class, not an exact move, so a line would need an invented tick value for each class, and that adds a modelling choice to explain. |
-| Sampling controls | Temperature only, or also top-k or top-p | Temperature only. It is enough to show the model's spread. |
-| Where the model runs | In a Python process, or in the browser | A Python process on the laptop. The model is small, so generating a few hundred events is quick on the CPU. Running in the browser (for example via ONNX) is a later option for sharing. |
-| Front end | A Python app (Streamlit or Gradio), or a local server with a browser front end | A local server with a browser front end. The icons are SVG, so a browser draws them natively. |
-| Code boundary | Inside the main package, or a separate module | A separate module that imports the tokeniser and model code. The GUI then cannot alter the study pipeline. |
+| Prompt source | A real stretch of data picked by time, or a sequence the user builds by clicking icons | A real stretch shows the model in a calm or a volatile regime. A built sequence lets the user test an idea such as a run of large sells. |
+| Prompt days | Test-month days only | The model has not seen them. No training day can be mistaken for a memorised one. |
+| Number of continuations | A control, default 1 | A single sample is the simplest view. Several samples show how variable the model is. |
+| Price path | Icons only, no price line | A token holds a move class, not an exact move. A line would need an invented tick value per class. |
+| Sampling controls | Temperature only | Enough to show the model's spread. |
+| Where the model runs | In a Python process on the laptop | The model is small, so generating a few hundred events is quick on the CPU. Running in the browser (for example via ONNX) is a later option for sharing. |
+| Front end | A local server with a browser front end | The icons are SVG, so a browser draws them natively. |
+| Code boundary | A separate module that imports the tokeniser and model code | The GUI then cannot alter the study pipeline. |
 
 ## 10. Open decisions
 
-The study design has no open decisions. The generation GUI details in section 9 are open. The remaining work is implementation. Two checks are planned for when a model exists:
+There are no open decisions. The remaining work is implementation. Two checks are planned for when a model exists:
 
 - Repeat the dependence check for the block length on the surprisal series of the training period (see [block-bootstrap.md](block-bootstrap.md)).
 - Read the loss by position within a chunk during training, to confirm that a stride of 64 gives scored events a consistent amount of history.
