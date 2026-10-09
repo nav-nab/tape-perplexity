@@ -1,6 +1,6 @@
 # Tokeniser design
 
-**Status (2026-10-09):** fully specified, not yet implemented. A few implementation details are left open in [section 9](#9-implementation-details-left-open).
+**Status (2026-10-09):** fully specified and implemented (`tape/tokeniser.py`, `tape/stages/events.py` and `tape/stages/tokenise.py`). The implementation choices for details the specification left open are in [section 9](#9-implementation-choices).
 
 This tokeniser feeds the model described in [project-design.md](project-design.md).
 
@@ -232,15 +232,17 @@ The vocabulary has $2\cdot S\cdot 7 \le 224$ tokens. The model uses a single sof
 - Test-period events use the training-period median and the same tail merges.
 - A test-period size outside the training range falls into an open-ended outer bin.
 
-## 9. Implementation details left open
+## 9. Implementation choices
 
-Choose a sensible option for each, then document it and keep it fixed.
+The specification left these details open. The code settles them as follows.
 
-- **Floating-point edges.** Sizes are whole multiples of 0.00001 BTC. Five of the edges ($5\times10^{-4}$, $5\times10^{-3}$, $0.05$, $0.5$ and $5$) land exactly on such a multiple. Compare in integer lot units, or use a small tolerance, so that a size equal to an edge always goes to the same bin.
-- **Tail rule procedure.** Apply it from the outside in, until every outer bin is at or above 1%. Interior bins below 1% are not merged.
-- **Median boundary.** Whether a move exactly equal to the median is "mid" or "large" is not fixed.
-- **First event.** The first event of the stream has no previous event, so it has no price move and is skipped.
-- **Timestamps.** The merge test needs equal timestamps at native resolution. Do not truncate microseconds to milliseconds.
+- **Integers, not floats.** Prices are held in ticks and sizes in lots (whole numbers) from the moment records are read. Size comparisons are therefore exact.
+- **Floating-point edges.** Each edge is built as an exact power of ten times a fractional power. Five of the edges ($5\times10^{-4}$, $5\times10^{-3}$, $0.05$, $0.5$ and $5$ BTC) are whole numbers of lots and come out exact. A size equal to an edge always goes to the upper bin.
+- **Tail rule procedure.** It is applied from the outside in, on each end separately, until the outermost bin holds at least 1% of training events. Interior bins below 1% are not merged.
+- **Median boundary.** A move exactly equal to the training median is "mid".
+- **First event.** The first event of the whole stream has no previous event, so it is dropped. Every later event compares with its predecessor, including across midnight.
+- **Day boundaries.** Records are merged within each daily file. An order that straddles midnight inside one microsecond would be split in two. This is negligible.
+- **Timestamps.** The merge test compares timestamps at native resolution. Microsecond files are used as they are. A file in milliseconds would be converted to microseconds, not truncated.
 
 ## 10. Alternatives considered
 

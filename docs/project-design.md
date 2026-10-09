@@ -1,6 +1,6 @@
 # Tape Perplexity: project design
 
-**Status (2026-10-09):** design complete, no code yet. Every design decision is settled. The tokeniser is specified in [tokeniser-design.md](tokeniser-design.md), and the confidence interval is specified in [block-bootstrap.md](block-bootstrap.md).
+**Status (2026-10-09):** design complete and the code is written. It has been tested on synthetic data and on a five-day real-data smoke run. The full study has not been run yet. The tokeniser is specified in [tokeniser-design.md](tokeniser-design.md), and the confidence interval is specified in [block-bootstrap.md](block-bootstrap.md).
 
 Part 1 is a short overview. Part 2 holds the detailed design notes.
 
@@ -184,16 +184,16 @@ $$
 - Give a **block-bootstrap confidence interval**, because consecutive events are strongly dependent. The method and the evidence for the block length are in [block-bootstrap.md](block-bootstrap.md). The block length is 1,000,000 events (about one trading day), with about 25 blocks in the test month.
 - No other statistics are planned (see section 2).
 
-## 9. Generation GUI (planned)
+## 9. Generation GUI
 
-A GUI is built alongside the code. The user supplies a starting sequence of events, and the trained model generates new events one at a time, as a language model continues a sentence. Each generated token is sampled from the model's predicted distribution and appended to the sequence. The GUI scores nothing. It is a demonstration and exploration tool outside the claim under test, so it must not change any result.
+A GUI is part of the code (`gui.py`). The user supplies a starting sequence of events, and the trained model generates new events one at a time, as a language model continues a sentence. Each generated token is sampled from the model's predicted distribution and appended to the sequence. The GUI scores nothing. It is a demonstration and exploration tool outside the claim under test, so it must not change any result.
 
 Contents:
 
 - **Prompt tape.** A row of token icons (see [token-icons.md](token-icons.md)) for the starting sequence. It holds up to 511 events, so the model always has room to produce one more.
 - **Generated tape.** The sampled events continue the row. They are drawn apart from the prompt, behind a divider and with a tinted background, so the reader can see where the real data ends.
 - **Real continuation.** When the prompt comes from data, the events that actually followed are shown beneath the generated ones. The model is not expected to match them. The contrast in dot size and tail length is the point.
-- **Controls.** The number of events to generate, the sampling temperature, the number of continuations (default 1, shown side by side when higher), and a random seed.
+- **Controls.** The number of events to generate, the sampling temperature, the number of continuations (default 1, one row each when higher), and a random seed.
 
 Design choices:
 
@@ -208,6 +208,8 @@ Design choices:
 | Front end | A local server with a browser front end | The icons are SVG, so a browser draws them natively. |
 | Code boundary | A separate module that imports the tokeniser and model code | The GUI then cannot alter the study pipeline. |
 
+Run it with `python gui.py` (add `--open` to open a browser). It reads only `models/`. If the tokenised test month is on disk, `python gui.py --data work` also lets the user pick a prompt at any time in that month.
+
 ## 10. Code structure and run behaviour
 
 The whole study runs from one script. Three behaviours are required of it.
@@ -217,6 +219,24 @@ The whole study runs from one script. Three behaviours are required of it.
 - **A heartbeat every minute.** Each line gives the current stage, its progress and the estimated time to finish the whole run.
 
 The code is organised so that the script stays short. Each stage lives in its own module, and the script only calls the stages in order. Every module, function and non-obvious step carries a comment that explains why it is done, not only what it does.
+
+### Code map
+
+Run `python run.py` for the study and `python run.py --smoke` for a tiny version of every stage (a few minutes). Settings live in one file, `tape/config.py`. Any setting can be overridden on the command line, for example `--set M=1000`. A changed setting makes the script refuse to resume. `--reset` deletes the saved state and keeps the downloads.
+
+| Stage | Module | What it writes (under `work/` unless stated) |
+|---|---|---|
+| `download` | `tape/stages/download.py` | `raw/`: the 91 daily zips, each checked against Binance's checksum |
+| `events` | `tape/stages/events.py` | `events/<day>.npz`: side, size (lots), last price (ticks), start time |
+| `tokenise` | `tape/stages/tokenise.py`, `tape/tokeniser.py` | `tokeniser.json`, `tokens/<day>.npz`, and `data/{train,test}_{tokens,delta,t0}.npy` |
+| `volatility` | `tape/stages/volatility.py` | `data/rv.npy`, `regime.json` |
+| `train_seed<k>` | `tape/stages/train.py`, `tape/model.py` | `train/seed<k>/final.pt`, `summary.json` |
+| `select` | `tape/stages/train.py` | `selected.json` |
+| `score` | `tape/stages/score.py` | `data/surprisal.npy` |
+| `evaluate` | `tape/stages/evaluate.py`, `tape/stats.py` | `results/results.json`, `results/timeseries.png`, `results/scatter.png` |
+| `export` | `tape/stages/export.py` | `models/model.pt`, `models/tokeniser.json`, `models/prompt_excerpts.json` |
+
+The runtime machinery (atomic writes, checkpoint timing, heartbeat, stage runner) is in `tape/runtime.py`. Tests are in `tests/`: unit tests, and end-to-end runs on synthetic Binance-format files that include an interrupt-and-resume check.
 
 ### Resuming
 
@@ -252,10 +272,10 @@ The generation GUI is not a stage of this script. It is a separate command (see 
 
 ## 11. Open decisions
 
-There are no open decisions. The remaining work is implementation. Two checks are planned for when a model exists:
+There are no open decisions. Two planned checks are handled as follows.
 
-- Repeat the dependence check for the block length on the surprisal series of the training period (see [block-bootstrap.md](block-bootstrap.md)).
-- Read the loss by position within a chunk during training, to confirm that a stride of 64 gives scored events a consistent amount of history.
+- **Dependence of the surprisal series.** The plan was to repeat the block-length check on the surprisal series of the training period. Scoring the training period would cost as much as scoring the test month, so the evaluation stage reports the autocorrelation of both series on the test month instead (in `results.json`). This is a cheaper stand-in. If it suggests dependence beyond one day, the block length should be revisited (see [block-bootstrap.md](block-bootstrap.md)).
+- **Loss by position.** Training saves the mean loss at each position within a chunk (`summary.json`). It confirms that scored events, which have 448 to 511 events of history, sit on the flat part of the curve.
 
 ## 12. Design rationale
 

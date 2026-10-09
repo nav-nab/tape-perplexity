@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tape generator</title>
+<style>
+  :root {
+    --ground: #F4F5F7; --ink: #14181F; --muted: #4A5260; --tile: #E9ECF2; --line: #CBD1DB;
+    --buy: #2563EB; --sell: #E8590C; --gen: #FFF3E3; --tile-gen: #F7DDB8; --card: #FFFFFF;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ground: #0F1420; --ink: #E6EAF2; --muted: #9AA5BD; --tile: #1B2333; --line: #2B3550;
+            --buy: #5B8DEF; --sell: #FF8A3D; --gen: #2A2218; --tile-gen: #3A2D1B; --card: #151C2C; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { margin: 0 0 4px; font-size: 26px; }
+  p.lead { margin: 0 0 20px; color: var(--muted); max-width: 820px; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .panel h2 { margin: 0 0 10px; font-size: 15px; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+  select, input[type=number], input[type=text] { font: inherit; padding: 6px 8px; border: 1px solid var(--line);
+         border-radius: 6px; background: var(--ground); color: var(--ink); }
+  input[type=range] { width: 160px; }
+  button { font: inherit; padding: 7px 14px; border-radius: 6px; border: 1px solid var(--line);
+           background: var(--tile); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--buy); border-color: var(--buy); color: #fff; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .moves { display: flex; gap: 4px; }
+  .moves button { padding: 2px; border-radius: 6px; line-height: 0; }
+  .moves button.on, .sides button.on { outline: 2px solid var(--ink); }
+  .sides { display: flex; gap: 6px; }
+  #status { color: var(--muted); font-size: 13px; min-height: 1.4em; }
+  #tapes { overflow-x: auto; padding-bottom: 8px; }
+  .trow { display: flex; align-items: center; margin-bottom: 6px; width: max-content; }
+  .label { position: sticky; left: 0; z-index: 2; width: 130px; flex: none; padding: 0 8px; background: var(--card);
+           font-size: 12px; color: var(--muted); }
+  .spacer { flex: none; }
+  .cells { display: flex; }
+  .cells.gen { background: var(--gen); border-left: 2px solid var(--ink); }
+  .cells svg { display: block; flex: none; }
+  .legend { display: flex; flex-wrap: wrap; gap: 24px; font-size: 13px; color: var(--muted); }
+  .legend div { display: flex; align-items: center; gap: 6px; }
+  .note { font-size: 13px; color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Tape generator</h1>
+  <p class="lead">Pick or build a starting sequence of trade events. The trained model then continues it, one event at a time,
+  by sampling each next token from its predicted distribution. Each token is drawn as an icon: colour is the side
+  (blue buy, orange sell), dot size is the order size, and the tail shows the price move.</p>
+
+  <div class="panel">
+    <h2>1. Starting sequence</h2>
+    <div class="row">
+      <label>Source
+        <select id="source"></select>
+      </label>
+      <label id="timeBox" style="display:none">UTC time in the test month
+        <span><input type="text" id="time" placeholder="2025-11-14 09:30" size="18"> <button id="goTime">Load</button></span>
+      </label>
+    </div>
+    <div id="builder" style="display:none; margin-top:12px">
+      <div class="row">
+        <label>Side<span class="sides"><button id="sideBuy" class="on" title="buy aggressor"></button><button id="sideSell" title="sell aggressor"></button></span></label>
+        <label>Size <span id="sizeText"></span><input type="range" id="size" min="0" value="5"></label>
+        <label>Price move<span class="moves" id="moveBtns"></span></label>
+        <button id="add">Add to sequence</button>
+        <button id="undo">Undo</button>
+        <button id="clear">Clear</button>
+      </div>
+    </div>
+    <div class="note" id="promptInfo"></div>
+  </div>
+
+  <div class="panel">
+    <h2>2. Generate</h2>
+    <div class="row">
+      <label>Events to generate<input type="number" id="nNew" value="64" min="1" max="512" style="width:90px"></label>
+      <label>Temperature <span id="tempText">1.0</span><input type="range" id="temp" min="0.2" max="2" step="0.1" value="1"></label>
+      <label>Continuations<input type="number" id="nSamples" value="1" min="1" max="8" style="width:90px"></label>
+      <label>Random seed<input type="number" id="seed" value="1" style="width:90px"></label>
+      <button class="primary" id="go">Generate</button>
+      <span id="status"></span>
+    </div>
+    <div class="note">Temperature 1 samples from the model's own distribution. Lower values stay close to the most likely tokens; higher values wander.</div>
+  </div>
+
+  <div class="panel">
+    <div id="tapes"></div>
+    <div class="legend" id="legend" style="margin-top:12px"></div>
+    <div class="note">The tinted area to the right of the line is generated by the model. Hover over an icon for its meaning.</div>
+  </div>
+</main>
+
+<script>
+// ------------------------------------------------------------------ icons
+// Geometry follows docs/token-icons.md exactly. A token id is
+//   id = (side * nSize + size) * 7 + move,   side 0 = sell, 1 = buy, move 0..6 = down large .. up large.
+const TAIL = [14, 8, 4, 0, 4, 8, 14];            // tail length T for each move class
+const DIR = [-1, -1, -1, 0, 1, 1, 1];            // move direction d
+const BUY = getComputedStyle(document.documentElement).getPropertyValue('--buy').trim() || '#2563EB';
+const SELL = getComputedStyle(document.documentElement).getPropertyValue('--sell').trim() || '#E8590C';
+const f = (x) => Math.round(x * 100) / 100;
+
+let meta = null;
+const decode = (id) => { const move = id % 7, rest = Math.floor(id / 7); return { side: Math.floor(rest / meta.n_size), size: rest % meta.n_size, move }; };
+const encode = (side, size, move) => (side * meta.n_size + size) * 7 + move;
+
+function iconSvg(side, size, move, px, tile = 'var(--tile)') {
+  const col = side ? BUY : SELL, r = 1.6 + 0.42 * size, d = DIR[move], T = TAIL[move];
+  const cy = 16 - d * T / 2, tip = cy + d * (r + T);
+  const tail = d === 0 ? '' :
+    `<path d="M${f(16 - r * 0.8)} ${f(cy)}L${f(16 + r * 0.8)} ${f(cy)}L16 ${f(tip)}Z" fill="${col}" opacity="0.5"/>`;
+  return `<svg viewBox="0 0 32 32" width="${px}" height="${px}"><rect width="32" height="32" rx="5" fill="${tile}"/>${tail}` +
+         `<circle cx="16" cy="${f(cy)}" r="${f(r)}" fill="${col}"/></svg>`;
+}
+function describe(id) {
+  const t = decode(id);
+  return `${t.side ? 'buy' : 'sell'}, size bin ${t.size + 1} (${meta.size_labels[t.size]}), ${meta.move_names[t.move]}`;
+}
+function tokenSvg(id, px = 32, gen = false) {
+  const t = decode(id);
+  // The <title> element gives the hover text.
+  return iconSvg(t.side, t.size, t.move, px, gen ? 'var(--tile-gen)' : 'var(--tile)')
+         .replace('>', `><title>${describe(id)}</title>`);
+}
+
+// ------------------------------------------------------------------ state
+const $ = (id) => document.getElementById(id);
+let prompt = [], realCont = [], promptNote = '';
+let builderSide = 1, builderMove = 3;
+const CELL = 32;
+
+function renderTapes(samples = []) {
+  const box = $('tapes');
+  const spacer = `<div class="spacer" style="width:${prompt.length * CELL}px"></div>`;
+  let html = `<div class="trow"><div class="label">Starting sequence<br>(${prompt.length} events)</div><div class="cells">${prompt.map((t) => tokenSvg(t)).join('')}</div></div>`;
+  samples.forEach((s, i) => {
+    html += `<div class="trow"><div class="label">Generated${samples.length > 1 ? ' ' + (i + 1) : ''}</div>${spacer}<div class="cells gen">${s.map((t) => tokenSvg(t, 32, true)).join('')}</div></div>`;
+  });
+  if (realCont.length) {
+    html += `<div class="trow"><div class="label">What really followed</div>${spacer}<div class="cells" style="border-left:2px solid var(--ink)">${realCont.map((t) => tokenSvg(t)).join('')}</div></div>`;
+  }
+  box.innerHTML = html;
+  box.scrollLeft = Math.max(0, prompt.length * CELL + 130 - box.clientWidth + 260);
+  $('promptInfo').textContent = promptNote + (prompt.length ? ` ${prompt.length} events.` : ' No events yet.');
+  $('go').disabled = prompt.length === 0;
+}
+
+// ------------------------------------------------------------------ sources
+async function loadExcerpt(id) {
+  const e = await (await fetch('/api/excerpt?id=' + encodeURIComponent(id))).json();
+  prompt = e.prompt; realCont = e.continuation;
+  promptNote = `Real test-month stretch starting ${e.t_start}; ${e.kind} (realised volatility ${e.rv_ticks.toFixed(0)} ticks at the end of the prompt).`;
+  renderTapes();
+}
+function onSource() {
+  const v = $('source').value;
+  $('builder').style.display = v === 'build' ? '' : 'none';
+  $('timeBox').style.display = v === 'time' ? '' : 'none';
+  if (v === 'build') { prompt = []; realCont = []; promptNote = 'Your own sequence.'; renderTapes(); }
+  else if (v !== 'time') loadExcerpt(v);
+}
+async function loadTime() {
+  const r = await fetch('/api/window?time=' + encodeURIComponent($('time').value));
+  const e = await r.json();
+  if (e.error) { $('status').textContent = e.error; return; }
+  prompt = e.prompt; realCont = e.continuation;
+  promptNote = `Real stretch starting ${e.t_start}.`;
+  $('status').textContent = '';
+  renderTapes();
+}
+
+// ------------------------------------------------------------------ builder
+function refreshBuilder() {
+  $('sideBuy').innerHTML = iconSvg(1, 6, builderMove, 34);
+  $('sideSell').innerHTML = iconSvg(0, 6, builderMove, 34);
+  $('sideBuy').classList.toggle('on', builderSide === 1);
+  $('sideSell').classList.toggle('on', builderSide === 0);
+  const s = +$('size').value;
+  $('sizeText').textContent = `${s + 1}: ${meta.size_labels[s]}`;
+  const box = $('moveBtns'); box.innerHTML = '';
+  for (let m = 0; m < 7; m++) {
+    const b = document.createElement('button');
+    b.innerHTML = iconSvg(builderSide, 6, m, 34); b.title = meta.move_names[m];
+    b.classList.toggle('on', m === builderMove);
+    b.onclick = () => { builderMove = m; refreshBuilder(); };
+    box.appendChild(b);
+  }
+}
+
+// ------------------------------------------------------------------ generate
+async function generate() {
+  $('go').disabled = true; $('status').textContent = 'Generating...';
+  const t0 = performance.now();
+  try {
+    const r = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, n_new: +$('nNew').value, temperature: +$('temp').value,
+                             n_samples: +$('nSamples').value, seed: +$('seed').value }) });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    renderTapes(j.samples);
+    $('status').textContent = `Done in ${((performance.now() - t0) / 1000).toFixed(1)} s.`;
+  } catch (e) { $('status').textContent = 'Error: ' + e.message; }
+  $('go').disabled = prompt.length === 0;
+}
+
+// ------------------------------------------------------------------ start up
+async function init() {
+  meta = await (await fetch('/api/meta')).json();
+  const src = $('source');
+  meta.excerpts.forEach((e) => src.add(new Option(`${e.id} · ${e.t_start.slice(0, 16)} · realised volatility ${e.rv_ticks.toFixed(0)}`, e.id)));
+  src.add(new Option('Build my own sequence', 'build'));
+  if (meta.has_data) src.add(new Option('Pick a time in the test month', 'time'));
+  src.onchange = onSource;
+  $('goTime').onclick = loadTime;
+  $('size').max = meta.n_size - 1; $('size').oninput = refreshBuilder;
+  $('sideBuy').onclick = () => { builderSide = 1; refreshBuilder(); };
+  $('sideSell').onclick = () => { builderSide = 0; refreshBuilder(); };
+  $('add').onclick = () => { if (prompt.length < meta.prompt_len) { prompt.push(encode(builderSide, +$('size').value, builderMove)); renderTapes(); } };
+  $('undo').onclick = () => { prompt.pop(); renderTapes(); };
+  $('clear').onclick = () => { prompt = []; renderTapes(); };
+  $('temp').oninput = () => { $('tempText').textContent = (+$('temp').value).toFixed(1); };
+  $('go').onclick = generate;
+  $('legend').innerHTML =
+    `<div>${iconSvg(1, 6, 3, 28)} buy</div><div>${iconSvg(0, 6, 3, 28)} sell</div>` +
+    `<div>${iconSvg(1, 0, 3, 28)}${iconSvg(1, 7, 3, 28)}${iconSvg(1, Math.min(15, meta.n_size - 1), 3, 28)} small to large order</div>` +
+    `<div>${[0, 1, 2, 3, 4, 5, 6].map((m) => iconSvg(1, 6, m, 28)).join('')} large fall to large rise</div>`;
+  refreshBuilder();
+  if (src.options.length) { src.selectedIndex = 0; onSource(); }
+}
+init();
+</script>
+</body>
+</html>

@@ -1,1 +1,12 @@
 .DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Large or regenerable run output (the final model in models/ and the figures in results/ ARE committed)
+work/
+work_smoke/
+models_smoke/
+results_smoke/
