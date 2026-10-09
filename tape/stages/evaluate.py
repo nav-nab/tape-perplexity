@@ -54,7 +54,7 @@ def run(ctx: RunContext) -> None:
 
     ctx.progress.update(0.2, "block bootstrap")
     boot = block_bootstrap_corr(x, y, cfg.block_len, cfg.n_boot, cfg.boot_seed)
-    reps = boot.pop("reps")
+    boot.pop("reps")
     ctx.log(f"evaluate: correlation {boot['rho']:.3f}, 95% block-bootstrap interval "
             f"[{boot['lo']:.3f}, {boot['hi']:.3f}] ({boot['n']:,} events, block {boot['block_len']:,})")
 

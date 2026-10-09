@@ -8,7 +8,7 @@ from tape import tokeniser as tk
 from tape.config import Config
 from tape.model import GPT, ModelConfig
 from tape.stages.events import records_to_events
-from tape.stats import (block_bootstrap_corr, corr_from_sums, pearson, rolling_mean,
+from tape.stats import (block_bootstrap_corr, rolling_mean,
                         rolling_rms)
 
 TICK, LOT = 0.01, 0.00001
@@ -213,3 +213,30 @@ def test_sliding_window_scoring_matches_brute_force():
         with torch.no_grad():
             logp = F.log_softmax(m(torch.from_numpy(hist.astype(np.int64))[None])[0, -1], -1)
         assert got[j] == pytest.approx(-logp[int(ext[n_ctx + j])].item(), abs=1e-4)
+
+
+def test_scoring_resume_equals_uninterrupted():
+    """Stopping after a batch and restarting from the saved window number changes nothing."""
+    from tape.stages.score import score_stream
+    torch.manual_seed(1)
+    L, stride, n_ctx, n_test = 32, 8, 31, 90
+    m = GPT(ModelConfig(vocab=20, n_layer=2, d_model=32, n_head=4, context=L)).eval()
+    ext = np.random.default_rng(1).integers(0, 20, n_ctx + n_test).astype(np.uint8)
+    full = score_stream(m, ext, n_ctx, stride, batch_windows=2)
+    saved = {}
+
+    def stop_after_first(k, buf):
+        saved.update(k=k, buf=buf.copy())
+        raise KeyboardInterrupt
+    with pytest.raises(KeyboardInterrupt):
+        score_stream(m, ext, n_ctx, stride, 2, on_batch=stop_after_first)
+    resumed = score_stream(m, ext, n_ctx, stride, 2, start_window=saved["k"], out=saved["buf"])
+    assert np.array_equal(full, resumed)
+
+
+def test_full_config_matches_the_design():
+    c = Config.full()
+    assert (c.N, c.M, c.stride, c.context) == (3000, 3000, 64, 512)
+    assert c.block_len == 1_000_000 and c.n_boot == 2000 and c.seeds == (0, 1, 2)
+    assert c.peak_lr == 1e-3 and c.warmup_steps == 100 and c.weight_decay == 0.1
+    assert c.tokens_per_step == 16_384
