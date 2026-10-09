@@ -108,6 +108,15 @@ Specified in full in [tokeniser-design.md](tokeniser-design.md). In brief:
 - Model size, context length and optimiser settings are not yet decided. They should be small enough for a laptop-scale budget.
 - The vocabulary is small, so the output layer is cheap.
 
+### Training
+
+- **Objective:** next-token cross-entropy over the 224 token types. The loss per event is its surprisal, in nats.
+- **One pass** over the training stream (31 million events), with no separate validation set. Each batch is new data, so the running loss on each batch is an honest held-out estimate. If the loss is still falling at the end, a further pass can be added.
+- **Batches:** the training stream is cut into non-overlapping chunks of 512 events, and the chunks are shuffled. Each event is a prediction target once. Price moves are computed over the whole stream beforehand, not reset at chunk starts. The daily files join into one continuous stream, because the market is open 24/7.
+- **Optimiser (standard defaults):** AdamW, peak learning rate $10^{-3}$ with a short warm-up and cosine decay to 10% of the peak, weight decay 0.1, gradient clipping at 1.0, about 16,000 tokens per step (about 1,900 steps per pass). No dropout.
+- **Frozen model:** after training, the weights stay fixed for the whole test month.
+- **Seeds:** under discussion.
+
 ## 6. The perplexity signal
 
 For event $t$ with token $x_t$ and past tokens $x_{\lt t}$, the **surprisal** is
@@ -162,7 +171,7 @@ $$
 | Decision | Notes |
 |---|---|
 | Model size | Deferred. Small (4 layers, width 128, about 0.9M parameters) or medium (6 layers, width 192, about 2.8M). A context of 512 events is proposed. |
-| Training settings | Under discussion |
+| Number of random seeds | Under discussion; three seeds are proposed |
 | Bootstrap block length | Not yet discussed |
 
 ## 10. Design rationale

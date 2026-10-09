@@ -37,6 +37,7 @@ This file mirrors the running design log kept in the Claude project memory (`ind
 ## Model, signal, evaluation
 
 - Small causal transformer trained for next-token prediction.
+- Training settled: one pass over the training stream, no separate validation set (each batch is new data), non-overlapping shuffled chunks of 512 events, AdamW with peak learning rate 1e-3, warm-up and cosine decay, weight decay 0.1, gradient clipping 1.0, about 16,000 tokens per step, no dropout, weights frozen for the test month. The number of seeds is under discussion.
 - Primary signal: rolling mean surprisal over the last $N$ events (perplexity). Settled: $N=M=3000$, so both series summarise the same events with no extra tuned parameter.
 - Volatility measure settled: root mean square of the per-event tick moves over the last $M$ events (plain realised volatility in event time). No jump-robust or noise-corrected variants. $M=3000$ events settled, chosen on 23 training days: one large sweep supplies 5 to 8% of a window's variance, a window spans about 12 minutes on a calm day, and adjacent windows agree with correlation about 0.6 (median 0.61) in log RV. Regime threshold settled: the 90th percentile of RV over all training events (about 251 ticks in a check on the 61 training days). The 10 October crash supplies 45% of flagged events (threshold would be about 222 ticks without it; it is kept). The flag is used for shading in plots and does not enter the headline correlation.
 - Evaluation: plot perplexity against realised volatility over time, report the correlation on the test period, block-bootstrap confidence interval.
@@ -44,5 +45,5 @@ This file mirrors the running design log kept in the Claude project memory (`ind
 
 ## Open decisions
 
-- Project level: model size (deferred; small about 0.9M or medium about 2.8M parameters; context 512 proposed, not confirmed), training settings, test-time scoring, bootstrap block length.
+- Project level: model size (deferred; small about 0.9M or medium about 2.8M parameters; context 512 proposed, not confirmed), number of random seeds (three proposed), test-time scoring, bootstrap block length.
 - Tokeniser: all decisions settled (1 to 5).
