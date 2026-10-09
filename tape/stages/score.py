@@ -39,13 +39,12 @@ from .tokenise import data_path
 from .train import final_path
 
 
-def surprisal_path(ctx: RunContext, split: str = "test"):
-    name = "surprisal.npy" if split == "test" else "surprisal_train.npy"
-    return ctx.cfg.path("data", name)
+def surprisal_path(ctx: RunContext):
+    return ctx.cfg.path("data", "surprisal.npy")
 
 
-def partial_path(ctx: RunContext, split: str = "test"):
-    return ctx.cfg.path("score", f"partial_{split}.npz")
+def partial_path(ctx: RunContext):
+    return ctx.cfg.path("score", "partial.npz")
 
 
 def load_model(path) -> GPT:
@@ -94,55 +93,38 @@ def score_stream(model: GPT, ext: np.ndarray, n_ctx: int, stride: int, batch_win
     return out
 
 
-def score_split(ctx: RunContext, split: str) -> None:
-    """Score one split with the selected seed. ``split`` is "test" or "train".
-
-    Test month: the last 511 training events serve as history for the first test events.
-    Training period: there is nothing before it, so the first 511 events serve as history
-    only and are not scored (their surprisal is stored as NaN, which keeps the array
-    aligned with the event numbering).
-    """
+def run(ctx: RunContext) -> None:
     cfg = ctx.cfg
     sel = read_json(cfg.path("selected.json"))["seed"]
     model = load_model(final_path(ctx, sel))
     n_ctx = cfg.context - 1
-    tokens = np.load(data_path(ctx, split, "tokens"), mmap_mode="r")
-    if split == "test":
-        train = np.load(data_path(ctx, "train", "tokens"), mmap_mode="r")
-        ext = np.concatenate((np.asarray(train[-n_ctx:]), np.asarray(tokens)))
-        n_scored, pad = len(tokens), 0
-    else:
-        ext, n_scored, pad = np.asarray(tokens), len(tokens) - n_ctx, n_ctx
-    n_windows = -(-n_scored // cfg.stride)
-    ctx.log(f"score ({split}): seed {sel}, {n_scored:,} events, {n_windows:,} windows of {cfg.context} "
+    train = np.load(data_path(ctx, "train", "tokens"), mmap_mode="r")
+    test = np.load(data_path(ctx, "test", "tokens"), mmap_mode="r")
+    # History for the first test events: the last 511 training events (never scored).
+    ext = np.concatenate((np.asarray(train[-n_ctx:]), np.asarray(test)))
+    n_test = len(test)
+    n_windows = -(-n_test // cfg.stride)
+    ctx.log(f"score: seed {sel}, {n_test:,} test events, {n_windows:,} windows of {cfg.context} "
             f"(stride {cfg.stride})")
 
-    part = partial_path(ctx, split)
-    k0, out = 0, np.zeros(n_scored, dtype=np.float32)
+    part = partial_path(ctx)
+    k0, out = 0, np.zeros(n_test, dtype=np.float32)
     if part.exists():                                       # ---- resume ----
         s = np.load(part)
         if str(s["fingerprint"]) == cfg.fingerprint():
             k0, out = int(s["next_window"]), s["surprisal"].copy()
-            ctx.log(f"score ({split}): resumed at window {k0:,}/{n_windows:,}")
+            ctx.log(f"score: resumed at window {k0:,}/{n_windows:,}")
     t0, w0 = time.monotonic(), k0
 
     def on_batch(next_window: int, buf: np.ndarray) -> None:
         rate = (next_window - w0) / max(time.monotonic() - t0, 1e-9)
         ctx.progress.update(next_window / n_windows,
-                            f"{split} window {next_window:,}/{n_windows:,} {rate * cfg.context / 1000:.1f}k tok/s")
+                            f"window {next_window:,}/{n_windows:,} {rate * cfg.context / 1000:.1f}k tok/s")
         ctx.maybe_checkpoint(lambda: save_npz(part, surprisal=buf, next_window=next_window,
                                               fingerprint=np.array(cfg.fingerprint())))
 
     score_stream(model, ext, n_ctx, cfg.stride, cfg.score_batch_windows, k0, out, on_batch)
-    save_npy(surprisal_path(ctx, split), np.concatenate((np.full(pad, np.nan, dtype=np.float32), out)))
+    save_npy(surprisal_path(ctx), out)
     if part.exists():
         part.unlink()
-    ctx.log(f"score ({split}): mean surprisal {out.mean():.4f} nats over {n_scored:,} events")
-
-
-def run(ctx: RunContext) -> None:
-    score_split(ctx, "test")
-
-
-def run_train(ctx: RunContext) -> None:
-    score_split(ctx, "train")
+    ctx.log(f"score: mean surprisal {out.mean():.4f} nats over {n_test:,} test events")

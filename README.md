@@ -17,12 +17,12 @@ Read Part 1 of the [project design](docs/project-design.md) for the question, th
 ```bash
 pip install -r requirements.txt        # numpy, pandas, torch (CPU is enough), matplotlib, pytest
 python run.py --smoke                  # tiny version of every stage; a few minutes; checks your setup
-python run.py                          # the full study: about 7.5 hours on a laptop CPU
+python run.py                          # the full study: about 5 hours on a laptop CPU
 python gui.py --open                   # generation GUI; needs the files in models/
 pytest                                 # unit and end-to-end tests
 ```
 
-The full run downloads 91 daily Binance files, trains three seeds, scores the test month and writes the results to `results/`. The last two stages score the training period for a dependence check on the confidence interval. It can be interrupted at any time and resumed by running the same command again. It saves a checkpoint every 10 minutes and prints a status line with an ETA every minute. See section 10 of the project design.
+The full run downloads 91 daily Binance files, trains three seeds, scores the test month and writes the results to `results/`. It can be interrupted at any time and resumed by running the same command again. It saves a checkpoint every 10 minutes and prints a status line with an ETA every minute. See section 10 of the project design.
 
 ## Docs
 

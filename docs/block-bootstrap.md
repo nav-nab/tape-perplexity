@@ -2,7 +2,7 @@
 
 This note explains how the confidence interval for the headline correlation is computed. It is written to be reused in the write-up. Section 9 holds suggested wording for the paper.
 
-**Status (2026-10-09):** the method is fixed. The block length is fixed at 1,000,000 events (section 7). The dependence check on the surprisal series is run by the code (stages `score_train` and `dependence`; results in `results/dependence_check.json`).
+**Status (2026-10-09):** the method is fixed. The block length is fixed at 1,000,000 events (section 7). The block-length check on the surprisal series is run by the evaluation stage (results in `results/results.json` and `results/block_length.png`).
 
 ---
 
@@ -166,7 +166,7 @@ How the standard error of the mean of $\log \mathrm{RV}_t$, estimated from block
 - It leaves about 25 blocks in the test month, enough for a usable interval.
 - Longer blocks would leave too few blocks to resample.
 
-**Limits of this check.** It uses $\log \mathrm{RV}$ as a proxy for both series. The code repeats the same dependence check on the surprisal series over the training period, which depends on neither the test month nor the volatility target. The model was trained on those events, so the surprisal there is in-sample. The check measures dependence only.
+**Limits of this check.** It uses $\log \mathrm{RV}$ as a proxy for both series. The evaluation stage repeats the same check on the surprisal series over the test month. Choosing the block length from the series being resampled is the usual practice, and the check measures dependence only. It does not use the size of the correlation.
 
 ## 8. What the interval does and does not cover
 

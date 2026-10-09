@@ -10,7 +10,8 @@ moving-block bootstrap interval (block length 1,000,000 events, 2,000 replicates
 docs/block-bootstrap.md). The figures show the two series over time with the
 high-volatility regime shaded, and a scatter of one against the other.
 
-Outputs (in the results directory): ``results.json``, ``timeseries.png``, ``scatter.png``.
+Outputs (in the results directory): ``results.json``, ``timeseries.png``, ``scatter.png`` and
+``block_length.png`` (the block-length check).
 """
 
 from __future__ import annotations
@@ -57,6 +58,16 @@ def run(ctx: RunContext) -> None:
     ctx.log(f"evaluate: correlation {boot['rho']:.3f}, 95% block-bootstrap interval "
             f"[{boot['lo']:.3f}, {boot['hi']:.3f}] ({boot['n']:,} events, block {boot['block_len']:,})")
 
+    ctx.progress.update(0.4, "block-length check")
+    # Block-length check: the standard error of the correlation for a range of block
+    # lengths. If it is still rising at the length used, the interval is too narrow. The
+    # check measures dependence in the test series; it does not use the size of the
+    # correlation to choose anything.
+    block_check = []
+    for b in [b for b in cfg.block_check_lens if b <= len(x) // 4]:      # need several blocks to resample
+        r = block_bootstrap_corr(x, y, b, cfg.n_boot, cfg.boot_seed)
+        block_check.append(dict(block_len=b, se=float(np.std(r["reps"], ddof=1)), ci_low=r["lo"], ci_high=r["hi"]))
+        ctx.log(f"evaluate: block {b:>9,}: bootstrap SE {block_check[-1]['se']:.4f}")
     ctx.progress.update(0.5, "diagnostics")
     lags = [cfg.N, 10 * cfg.N, 100 * cfg.N, cfg.block_len]
     flagged = rv_valid > regime["threshold_ticks"]
@@ -66,6 +77,7 @@ def run(ctx: RunContext) -> None:
         N=cfg.N, M=cfg.M, regime_threshold_ticks=regime["threshold_ticks"],
         flagged_share_test=float(flagged.mean()),
         mean_surprisal_nats=float(np.mean(surprisal)),
+        block_length_check=block_check,
         # Autocorrelation of both series at several lags (how fast dependence fades).
         acf_log_rv={str(k): v for k, v in acf(y, lags).items()},
         acf_surprisal_mean={str(k): v for k, v in acf(x, lags).items()},
@@ -95,6 +107,19 @@ def run(ctx: RunContext) -> None:
     fig.tight_layout()
     fig.savefig(res_dir / "timeseries.png", dpi=130)
     plt.close(fig)
+
+    # ---- figure: standard error against block length ---------------------------------
+    if block_check:
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.plot([b["block_len"] for b in block_check], [b["se"] for b in block_check], "o-", color="#1f4e9c")
+        ax.axvline(boot["block_len"], color="grey", ls="--", lw=0.8)
+        ax.set_xscale("log")
+        ax.set_xlabel("block length (events)")
+        ax.set_ylabel("bootstrap standard error of the correlation")
+        ax.set_title("Does the standard error level off?\n(dashed line: block length used)")
+        fig.tight_layout()
+        fig.savefig(res_dir / "block_length.png", dpi=130)
+        plt.close(fig)
 
     # ---- figure 2: scatter -------------------------------------------------------------
     rng = np.random.default_rng(0)

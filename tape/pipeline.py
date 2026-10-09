@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from .config import Config
-from .stages import (dependence, download, evaluate, events, export, score, tokenise, train,
-                     volatility)
+from .stages import download, evaluate, events, export, score, tokenise, train, volatility
 
 
 def build_stages(cfg: Config):
@@ -21,10 +20,6 @@ def build_stages(cfg: Config):
         ("score", score.run),               # surprisal of every test event
         ("evaluate", evaluate.run),         # correlation, block-bootstrap interval, figures
         ("export", export.run),             # weights, tokeniser and excerpts for the repo
-        # The headline result and the exported files are complete at this point. The two
-        # stages below are the dependence check on the training period (about 2.5 h more).
-        ("score_train", score.run_train),   # surprisal of every training event
-        ("dependence", dependence.run),     # does the bootstrap block length still look long enough?
     ]
     assert [n for n, _ in stages] == cfg.stage_names
     return stages
