@@ -128,7 +128,7 @@ The window $N$ trades noise (small $N$) against lag (large $N$). It is open.
 
 ## 7. The regime (volatility) signal
 
-- Volatility is **realised volatility over the last $M$ events**. Windows are in *event time*, not clock time. This matches the token stream, which also has no clock.
+- Volatility is **realised volatility over the last $M=3000$ events**. Windows are in *event time*, not clock time. This matches the token stream, which also has no clock.
 - The estimator is the **root mean square (RMS) of the per-event price moves**, in ticks:
 
 $$
@@ -138,6 +138,13 @@ $$
   where $\Delta_t$ is the price move of event $t$ (see the tokeniser design). The squared moves average to an estimate of the variance of a price move. Large sweeps count as high volatility, which is intended for a crash regime.
 - Bid-ask bounce adds a roughly constant offset to $\mathrm{RV}_t$, and heavy-tailed moves make it noisy. Both are accepted as properties of the setup.
 - A **high-volatility regime** is a threshold on realised volatility. The candidate threshold is the 90th percentile of the training period.
+
+- **Why $M=3000$.** It was chosen on 23 training days (none from the test month).
+  - Below about 1000, one large sweep supplies a large share of a window's variance.
+  - At 3000, the largest single event contributes about 5 to 8% of a window.
+  - A window spans about 12 minutes on a calm day and about 30 seconds at the peak of the 10 October crash.
+  - Adjacent non-overlapping windows agree with a correlation of about 0.6 in $\log\mathrm{RV}$ on ordinary days (median 0.61 over the 23 days).
+  - Beyond 3000 the gains are small and calm-day windows start to exceed 40 minutes.
 
 ## 8. Evaluation
 
@@ -151,7 +158,6 @@ $$
 | Decision | Notes |
 |---|---|
 | Surprisal window $N$ | Noise versus lag |
-| Volatility window $M$ | Event-time window; noise against lag |
 | Regime threshold | Candidate: training 90th percentile |
 | Model size and training settings | Not yet discussed |
 | Bootstrap block length | Not yet discussed |
