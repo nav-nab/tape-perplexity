@@ -206,7 +206,7 @@ Design choices:
 
 The whole study runs from one script. Three behaviours are required of it.
 
-- **One command.** A single script runs the full workflow in order: download, clean and merge, tokenise, train the three seeds, select the seed, score the test month, and evaluate.
+- **One command.** A single script runs the full workflow in order, from the raw data to the final figures. The data pipeline (download, clean and merge, tokenise) is its first part. The stages are: download, clean and merge, fit the tokeniser and tokenise, train the three seeds, select the seed, score the test month, evaluate, and export the files kept in the repo.
 - **Checkpoints every 10 minutes of wall time.** The run can be interrupted at any point and resumed by running the same command again.
 - **A heartbeat every minute.** Each line gives the current stage, its progress and the estimated time to finish the whole run.
 
@@ -235,6 +235,7 @@ The final model is stored in the repo so that the generation GUI runs without re
 - **Weights.** Only the selected seed's final weights are committed, in a `models/` directory. At about 2.8 million parameters in 32-bit floats, the file is about 11 MB, well under GitHub's file size limit.
 - **Tokeniser.** The fitted tokeniser is committed with the weights: the price-move edges, the merged size bins and the vocabulary map. Without it the weights cannot be used, because token IDs would have no meaning.
 - **Model settings.** The architecture settings are saved with the weights, so the model can be rebuilt from the file alone.
+- **Prompt excerpts.** A small file of real stretches from the test month, for the generation GUI. Each excerpt holds 511 prompt events and the 256 events that followed, as token IDs, with its date and time. Ten excerpts are drawn at random with a fixed seed, five from stretches flagged as volatile and five from unflagged ones. They are drawn by rule, not picked by eye, so the GUI does not show only favourable examples. The file is under 100 KB.
 - **Not committed.** Checkpoints (which include optimiser state), the other two seeds, the downloaded data and the tokenised data. These are large or regenerable, and they are excluded by `.gitignore`.
 
 The script writes these files but does not run `git`. The commit is made by hand after the run finishes, so the repo history holds one version of the weights.
