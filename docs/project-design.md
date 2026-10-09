@@ -137,7 +137,12 @@ $$
 
   where $\Delta_t$ is the price move of event $t$ (see the tokeniser design). The squared moves average to an estimate of the variance of a price move. Large sweeps count as high volatility, which is intended for a crash regime.
 - Bid-ask bounce adds a roughly constant offset to $\mathrm{RV}_t$, and heavy-tailed moves make it noisy. Both are accepted as properties of the setup.
-- A **high-volatility regime** is a threshold on realised volatility. The candidate threshold is the 90th percentile of the training period.
+- A **high-volatility regime** is a period when $\mathrm{RV}_t$ exceeds a threshold. The threshold is the **90th percentile of $\mathrm{RV}_t$ over all events in the training period**. The test period is judged against this fixed training threshold. The flag is used to shade regimes in the plots. The headline correlation does not depend on it.
+- In a check on the 61 training days, the threshold came to about 251 ticks. Four properties are worth knowing:
+  - The crash of 10 October supplies 45% of all flagged events. Excluding it would lower the threshold to about 222 ticks. It is kept, because the crash is part of the training data.
+  - Flagged events are 10% of events but only about 2% of clock time, because trading is much busier in stressed periods.
+  - The volatility level shifts between months. The September threshold (159 ticks) would flag 50% of October events. So the share of flagged events in the test month need not be 10%.
+  - Most flagged episodes are short. 82% last under one window (3000 events), but they hold only 16% of flagged events. The 33 episodes of 10,000 events or more hold 56%.
 - **Why $M=3000$.** It was chosen on 23 training days (none from the test month).
   - Below about 1000, one large sweep supplies a large share of a window's variance.
   - At 3000, the largest single event contributes about 5 to 8% of a window.
@@ -156,7 +161,6 @@ $$
 
 | Decision | Notes |
 |---|---|
-| Regime threshold | Candidate: training 90th percentile |
 | Model size and training settings | Not yet discussed |
 | Bootstrap block length | Not yet discussed |
 

@@ -38,11 +38,11 @@ This file mirrors the running design log kept in the Claude project memory (`ind
 
 - Small causal transformer trained for next-token prediction.
 - Primary signal: rolling mean surprisal over the last $N$ events (perplexity). Settled: $N=M=3000$, so both series summarise the same events with no extra tuned parameter.
-- Volatility measure settled: root mean square of the per-event tick moves over the last $M$ events (plain realised volatility in event time). No jump-robust or noise-corrected variants. $M=3000$ events settled, chosen on 23 training days: one large sweep supplies 5 to 8% of a window's variance, a window spans about 12 minutes on a calm day, and adjacent windows agree with correlation about 0.6 (median 0.61) in log RV. The threshold is still open.
+- Volatility measure settled: root mean square of the per-event tick moves over the last $M$ events (plain realised volatility in event time). No jump-robust or noise-corrected variants. $M=3000$ events settled, chosen on 23 training days: one large sweep supplies 5 to 8% of a window's variance, a window spans about 12 minutes on a calm day, and adjacent windows agree with correlation about 0.6 (median 0.61) in log RV. Regime threshold settled: the 90th percentile of RV over all training events (about 251 ticks in a check on the 61 training days). The 10 October crash supplies 45% of flagged events (threshold would be about 222 ticks without it; it is kept). The flag is used for shading in plots and does not enter the headline correlation.
 - Evaluation: plot perplexity against realised volatility over time, report the correlation on the test period, block-bootstrap confidence interval.
 - Left out by default: lead tests, GARCH or trade-intensity baselines, order book data, multiple architectures or token schemes.
 
 ## Open decisions
 
-- Project level: regime threshold (candidate: 90th percentile of the training-period $\mathrm{RV}$; being checked).
+- Project level: model size and training settings, bootstrap block length.
 - Tokeniser: all decisions settled (1 to 5).
