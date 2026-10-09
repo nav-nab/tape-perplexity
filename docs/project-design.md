@@ -1,6 +1,6 @@
 # Tape Perplexity: project design
 
-**Status (2026-10-09):** design stage, no code yet. The tokeniser is fully specified in [tokeniser-design.md](tokeniser-design.md). The two window lengths, the regime threshold and the model settings are still open (see [section 9](#9-open-decisions)).
+**Status (2026-10-09):** design complete, no code yet. Every design decision is settled. The tokeniser is specified in [tokeniser-design.md](tokeniser-design.md), and the confidence interval is specified in [block-bootstrap.md](block-bootstrap.md).
 
 Part 1 is a short overview. Part 2 holds the detailed design notes.
 
@@ -175,14 +175,15 @@ $$
 
 - Plot the perplexity series against realised volatility over the test period.
 - Report the correlation between them on the test period.
-- Give a **block-bootstrap confidence interval**, because consecutive events are strongly dependent. The method and the evidence for the block length are in [block-bootstrap.md](block-bootstrap.md). The proposed block length is 1,000,000 events (about one trading day), pending confirmation.
+- Give a **block-bootstrap confidence interval**, because consecutive events are strongly dependent. The method and the evidence for the block length are in [block-bootstrap.md](block-bootstrap.md). The block length is 1,000,000 events (about one trading day), with about 25 blocks in the test month.
 - No other statistics are planned (see section 2).
 
 ## 9. Open decisions
 
-| Decision | Notes |
-|---|---|
-| Bootstrap block length | Not yet discussed |
+None. The remaining work is implementation. Two checks are planned for when a model exists:
+
+- Repeat the dependence check for the block length on the surprisal series of the training period (see [block-bootstrap.md](block-bootstrap.md)).
+- Read the loss by position within a chunk during training, to confirm that a stride of 64 gives scored events a consistent amount of history.
 
 ## 10. Design rationale
 

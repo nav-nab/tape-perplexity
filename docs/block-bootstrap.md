@@ -2,7 +2,7 @@
 
 This note explains how the confidence interval for the headline correlation is computed. It is written to be reused in the write-up. Section 9 holds suggested wording for the paper.
 
-**Status (2026-10-09):** the method is fixed. The block length is proposed at 1,000,000 events and is waiting for confirmation (section 7).
+**Status (2026-10-09):** the method is fixed. The block length is fixed at 1,000,000 events (section 7). The dependence check should be repeated on the surprisal series once a model exists.
 
 ---
 
@@ -161,7 +161,7 @@ How the standard error of the mean of $\log \mathrm{RV}_t$, estimated from block
 
 **Reading the evidence.** The ratio keeps growing as blocks get longer. There is no plateau up to several million events, and a block of 1,000,000 events is roughly one day of trading. Volatility in this data is persistent on the scale of days, so the effective number of independent stretches is small. Short blocks, such as 3000 or 30,000 events, would understate the uncertainty by a large factor.
 
-**Proposal: $b=1{,}000{,}000$ events, about one trading day.**
+**Decision: $b=1{,}000{,}000$ events, about one trading day.**
 - It reaches 85% of the ratio seen at 3 million events with all days included, and about 64% with 10 October excluded. By 1,000,000 events the autocorrelation has fallen to 0.15 to 0.20.
 - It leaves about 25 blocks in the test month, enough for a usable interval.
 - Longer blocks would leave too few blocks to resample.

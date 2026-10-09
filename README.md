@@ -4,7 +4,7 @@ Does a small transformer trained on BTCUSDT trades get more "confused" when the 
 
 Each trade event becomes a token. A causal transformer learns to predict the next token. We then test whether its perplexity tracks realised volatility. This is a regime detector, not a price predictor.
 
-**Status:** design stage. No code yet.
+**Status:** design complete. No code yet.
 
 ## Docs
 
@@ -23,7 +23,8 @@ Each trade event becomes a token. A causal transformer learns to predict the nex
 - [x] Regime threshold (90th percentile of training RV)
 - [x] Model and training recipe (medium model, 3 seeds)
 - [x] Test-time scoring (sliding windows, stride 64)
-- [ ] Bootstrap block length
+- [x] Bootstrap block length (1,000,000 events)
+- [ ] Implementation: data pipeline, tokeniser, model, scoring, evaluation
 - [ ] Data download and tokeniser implementation
 - [ ] Model training
 - [ ] Evaluation
