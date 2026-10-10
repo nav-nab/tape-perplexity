@@ -78,7 +78,7 @@ The findings fall into two parts.
 \Cref{sec:method} describes the design.
 \Cref{sec:surprised,sec:rarity} give the two parts of the result.
 \Cref{sec:discussion} offers labelled interpretation, \cref{sec:limits} states the limitations, and \cref{sec:related} reviews related work.
-The appendices give the data, the tokeniser, the model, the statistics and the detailed results.
+The appendices give the market terms, the tokeniser, the model, the statistics, the detailed results and the inference interface.
 
 %% ------------------------------------------------------------------------------------
 \section{Method}\label{sec:method}
@@ -685,6 +685,58 @@ Flat moves are the least surprising, and large trades are the most surprising.
 \end{figure}
 
 %% ------------------------------------------------------------------------------------
+\section{Inference interface}\label{app:gui}
+
+The repository includes a small interface that continues a tape with the trained model.
+It is a demonstration and lies outside the claim tested in the paper.
+It computes no surprisal and changes no result.
+It is started with \texttt{python gui.py} and runs as a local web page.
+It reads only the weights, the tokeniser and a file of prompt excerpts, all kept in the repository, so it needs neither the downloaded data nor a retrained model.
+
+\paragraph{Starting sequence.}
+The user chooses one of three sources.
+\begin{itemize}
+  \item \textbf{A stored excerpt.} The file holds ten real stretches of the test month, each with 511 events and the 256 events that followed. Five were drawn at random from stretches in the high-volatility regime and five from other stretches. They were drawn by a fixed rule and not picked by eye.
+  \item \textbf{A time in the test month.} If the tokenised test month is on disk, any time in it can be chosen.
+  \item \textbf{A sequence built by hand.} The user clicks side, size and price move to add one icon at a time, for instance to try a run of large sell orders.
+\end{itemize}
+Prompts come from the test month only, so the model has not seen them.
+
+\paragraph{Generation.}
+The model reads the sequence and computes a distribution over the next token.
+The interface samples one token from it, appends it, and repeats.
+There are four controls.
+\begin{itemize}
+  \item The number of events to generate.
+  \item The sampling temperature. A temperature of 1 samples from the model's own distribution, lower values stay near the likeliest tokens, and higher values wander.
+  \item The number of continuations, each drawn as its own row.
+  \item A random seed.
+\end{itemize}
+Every token is drawn with the icon of \cref{fig:key}.
+Generated events are drawn on a tinted background to the right of a divider.
+When the prompt is a stored excerpt, the events that really followed are drawn underneath.
+Hovering over an icon gives its side, size range and price-move class.
+
+\paragraph{Example.}
+\Cref{fig:gui} is a screenshot of the interface.
+The prompt is a stretch of the test month that starts at 17:20 UTC on 9 November 2025, when realised volatility at the end of the prompt was 392 ticks, above the regime threshold of \Thr{} ticks.
+The model generated two continuations of 18 events at temperature 1.
+The prompt ends with large buys that carry long tails.
+The first continuation begins with two such tokens and then turns to small sells.
+The second begins with small tokens and has larger buys later.
+The two samples differ from each other and from the events that really followed.
+This is expected, because each token is a random draw from the model's distribution.
+The example is an illustration of the interface.
+We did not select it for its quality, and it is not evidence for any claim in the paper.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{figures/gui_example.png}
+\caption{Screenshot of the inference interface. Top: the chosen excerpt and the generation controls. Bottom: the end of the 511-event starting sequence, two sampled continuations of 18 events on a tinted background, and the first events that really followed.}
+\label{fig:gui}
+\end{figure}
+
+%% ------------------------------------------------------------------------------------
 \section{Reproducibility}\label{app:repro}
 
 The whole study runs from one script, \texttt{python run.py}.
@@ -701,6 +753,7 @@ Each seed trains for about \TrainMinutes{} minutes and the scoring takes about t
 
 The weights of the selected seed, the fitted tokeniser and a small file of prompt excerpts are in the repository, with a local interface for generating continuations of a tape.
 The figures, numbers and tables of this paper are produced from the run outputs by \texttt{paper/make\_figures.py}.
+The screenshot of \cref{app:gui} is made by \texttt{paper/make\_gui\_screenshot.py}.
 The text quotes numbers only through the generated files, so the paper cannot disagree with the run.
 The rarity benchmark and the other descriptive checks of \cref{app:rarity} are computed in that script.
 
