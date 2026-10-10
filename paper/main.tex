@@ -51,7 +51,9 @@ Perplexity, the exponential of the mean surprisal, is the standard summary of ho
 We ask whether the perplexity of a transformer trained on the trade tape rises when the market is volatile.
 
 We treat the tape as a language.
-Each trade event, meaning one taker order (an order that executes immediately against orders already resting in the market), becomes one token that records its side, its size and the price move it causes.
+Each trade event becomes one token.
+An event is one taker order, which is an order that executes immediately against orders already resting in the market.
+The token records the side of the order, its size and the price move it causes.
 No knowledge of finance is assumed, and \cref{app:data} explains the terms used.
 The vocabulary has \Vocab{} tokens.
 A small causal transformer is trained on two months of Bitcoin trades and then frozen.
@@ -59,7 +61,7 @@ We score every event of the following month by its surprisal.
 We average the surprisal over windows of \WinN{} events and compare the average with realised volatility over the same events.
 
 The question is one of detection.
-We ask whether surprisal is high when volatility is high, at the same time.
+We ask whether surprisal is high when volatility is high at the same time.
 We do not ask whether surprisal predicts later volatility.
 
 The findings fall into two parts.
@@ -264,10 +266,11 @@ We have not tested whether this explains the flattening.
 
 \textbf{What the model has learned.}
 Most of the model's gain over the benchmark is local.
-A count-based model that sees only the previous token reaches \PrevShare{} of it (\cref{app:rarity}).
-This model is a table of next-token frequencies given the previous token, estimated on the whole training period, and it is not a neural network.
-The transformer has a gain of \ModelGain{} nats over the benchmark, and most of that gain is available from one event of context.
-The training loss falls by about 0.14 nats as the history grows from a few events to several hundred (\cref{app:model}).
+The transformer gains \ModelGain{} nats over the benchmark.
+A count-based model that sees only the previous token reaches \PrevShare{} of that gain (\cref{app:rarity}).
+This model is a table of next-token frequencies given the previous token, estimated on the whole training period.
+It is not a neural network.
+The training loss of the transformer falls by about 0.14 nats as the history grows from a few events to several hundred (\cref{app:model}).
 We do not claim that the model uses long context.
 
 %% ------------------------------------------------------------------------------------
@@ -291,7 +294,7 @@ The benchmark's rarity depends on the training mix of tokens.
 
 \textbf{Scope.}
 The result is simultaneous.
-We do not test lead or lag, and we do not compare with volatility forecasts such as GARCH models.
+We do not test lead or lag, and we do not compare with standard volatility forecasting models such as GARCH, which predict volatility from past price changes.
 
 %% ------------------------------------------------------------------------------------
 \section{Related work}\label{sec:related}
