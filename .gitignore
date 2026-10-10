@@ -4,6 +4,7 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.venv/
 
 # Large or regenerable run output (the final model in models/ and the figures in results/ ARE committed)
 work/

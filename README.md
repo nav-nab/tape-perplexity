@@ -68,6 +68,21 @@ make -C paper                   # compile paper/main.pdf (needs LaTeX with latex
 The full run downloads 91 daily Binance files, trains three seeds, picks the one with the lowest training loss, scores the test month and writes `results/`.
 It checkpoints every 10 minutes, prints an ETA every minute, and resumes if interrupted.
 
+## Repository layout
+
+```
+run.py            the whole study, one resumable command
+gui.py            the generation GUI
+tape/             the code: stages/ (download, events, tokenise, volatility, train, score, evaluate, export),
+                  model, tokeniser, stats, runtime, and gui/ (the local web app)
+tests/            unit tests and end-to-end runs on synthetic data
+models/           the trained weights, the fitted tokeniser and the prompt excerpts for the GUI
+results/          the study's results: results.json and the evaluation plots
+paper/            the paper: TeX source, bibliography, figure script and compiled PDF
+docs/             design documents, the design log and the images used in this README
+work/             downloaded and tokenised data and training state (created by run.py, not in git)
+```
+
 ## Docs
 
 - [Paper](paper/main.pdf): the write-up. TeX source, bibliography and figure script are in `paper/`.
@@ -76,7 +91,6 @@ It checkpoints every 10 minutes, prints an ETA every minute, and resumes if inte
 - [Token icons](docs/token-icons.md): the picture for each token.
 - [Block bootstrap](docs/block-bootstrap.md): how the confidence interval is computed.
 - [Design log](docs/design-log.md): every design decision as it was made.
-- [Progress](docs/progress.md): the build checklist and what was left out.
 
 ## License
 

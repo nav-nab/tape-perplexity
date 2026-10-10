@@ -5,3 +5,5 @@ torch>=2.2          # CPU build is enough; see https://pytorch.org for the insta
 matplotlib>=3.8
 # Tests
 pytest>=8
+# Optional: only for paper/make_gui_screenshot.py
+# playwright>=1.40
