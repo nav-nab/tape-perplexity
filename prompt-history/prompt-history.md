@@ -1,14 +1,15 @@
 # Prompt history
 
-This is the history of the prompts that the project owner gave to the AI agents that helped build this project. The prompts are verbatim. The agents' replies are not included. Two off-topic prompts were removed before publication.
+This is the history of the prompts that the project owner gave to the AI agents that helped build this project. The prompts are verbatim, except for the reconstructed design phase described below. The agents' replies are not included. Two off-topic prompts were removed before publication.
 
 - **Agent A** is a Claude Code cloud session. It wrote the analysis, the paper, the README and the docs.
 - **Agent B** is a Claude Code session linked to the desktop app. It checked the paper against the code and the references, and then fixed the small errors it found.
 
-Prompts are in time order. Times are in UTC. The session of Agent A was long and was compacted once, and so its earliest prompts are listed without a time and some are not recoverable word for word. Earlier requests on the icon style, the tape banner, the generation GUI and the code design are not listed.
+Prompts are in time order. Times are in UTC. The session of Agent A was long and was compacted once, and so its earliest prompts are listed without a time and some are not recoverable word for word. The design phase before that is not listed. A reconstruction of it, paraphrased from the design log and the commit history, is in the section [Design phase (reconstructed)](#design-phase-reconstructed).
 
 ## Phases
 
+0. **Design** (a [reconstruction](#design-phase-reconstructed), paraphrased and not verbatim): the goal, the data, the tokeniser, the model, the evaluation, the icons, the GUI and the code requirements.
 1. **Results and write-up** (prompts [1 to 16](#p1)): checking the code against the design, analysing the finished run, settling the two-part framing and drafting the paper.
 2. **Polish** (prompts [17 to 22](#p17)): paper revisions, the GUI appendix, the README, the docs and the repo cleanup.
 3. **Verification** (prompts [23 to 27](#p23)): a second agent checks the paper against the code and the references and fixes the small errors. The last prompt of each agent sets up this history.
@@ -44,6 +45,60 @@ Prompts are in time order. Times are in UTC. The session of Agent A was long and
 | [25](#p25) | 2026-10-10 16:44 UTC | Agent B | Fix the small errors found in the write-up and a docstring. |
 | [26](#p26) | 2026-10-10 16:58 UTC | Agent A | Set up this prompt history. |
 | [27](#p27) | 2026-10-10 16:59 UTC | Agent B | Write this agent's prompt history. |
+
+## Design phase (reconstructed)
+
+The design discussion took place before the prompts listed below. Its prompts are not available. This section is a **reconstruction, not a record**. It is paraphrased from the project's design log and the timestamps of the git commits. It shows what the project owner asked for and decided, in order. It does not contain their words.
+
+Times are commit times on 9 October 2026 (UTC). A decision is shown at the time it was written into the repo, which is shortly after it was made. The tokeniser decisions were made before the first commit and have no time.
+
+### Opening requests
+
+| Time (UTC) | Topic | What was asked or decided |
+|---|---|---|
+| before 11:10 | Goal | A laptop-scale ML project in finance. Train a small transformer on tokenised Bitcoin trades and test whether its perplexity tracks volatility regimes. The model is a regime detector and not a price predictor. |
+| before 11:10 | Data | Binance spot BTCUSDT aggregated trades, because the non-crypto sources with trade-level data cost money. |
+| before 11:10 | Tokeniser | One token per taker order. Consecutive records merge into one event when they share side and timestamp and the price continues in the aggressor's direction. The price move is the last fill price minus the previous event's last fill price, measured in ticks and not basis points. |
+| before 11:10 | Tokeniser | Move classes: flat, exactly one tick, then two classes per direction split at the training median. Size is measured in BTC and binned on a log scale, three bins per decade, with rare tail bins merged into their neighbours. The tokens carry no time fields. The log scale was chosen because it matches how people perceive magnitude, in line with the idea of treating the tape as a language. |
+| 11:10 | Docs | Asked for a project design document and a tokeniser design document, written for a cold reader. Overview first, then details, with figures and examples. Clarity over brevity. |
+| 11:17 | Docs | Diagrams should be Mermaid or tables and not text boxes. A design log records every decision as it is made. |
+| 11:23 | Docs | Trim the documents for cold readers. Add a short README with a progress checklist. |
+
+### Study design decisions
+
+| Time (UTC) | Topic | What was asked or decided |
+|---|---|---|
+| 11:32 | Study period | 1 September to 30 November 2025. Train on September and October, test on November. September is very calm, the training months include the 10 October crash, and November has several separate stressed stretches. |
+| 11:38 | Volatility | Realised volatility in event time, as the root mean square of the per-event tick moves. No jump-robust or noise-corrected variants. |
+| 11:45 | Volatility window | 3,000 events, chosen on training days only. |
+| 11:47 | Surprisal window | The same 3,000 events, so both series summarise the same events. |
+| 11:52 | Regime threshold | The 90th percentile of training-period volatility. The flag is for shading plots and does not enter the headline correlation. |
+| 12:00 | Data size | Corrected an event-count estimate for the study period. |
+| 12:02 to 12:04 | Model and training | Model size deferred, then settled after a CPU benchmark. Training recipe: one pass over the training stream, no separate validation set, shuffled chunks of 512 events. |
+| 12:42 | Model | A medium model (6 layers, width 192, 6 heads, about 2.8M parameters) with three seeds. Only the best seed is used for the results. It is chosen by the lowest final training loss so that the test month stays out of the choice. |
+| 12:51 | Scoring | The owner wanted every event to have 511 events of history. That would take days on a laptop, so they chose sliding windows with a stride of 64, which takes about two hours. |
+| 12:58 to 13:04 | Confidence interval | A moving-block bootstrap. The block length was chosen from the dependence in the training period and set to 1,000,000 events. The design was declared complete. |
+
+### Extras and code requirements
+
+| Time (UTC) | Topic | What was asked or decided |
+|---|---|---|
+| 13:18 | Token icons | Every token gets a picture. Four styles were compared (candle, comet, heat tile, depth bars) and the comet was chosen. The owner asked that the visible tail be the same length at every dot size. |
+| 13:22 | README banner | A paper ticker-tape banner made of comet icons. The owner approved it. |
+| 13:23 to 13:29 | Inference GUI | First planned as a tool that scores surprisal. The owner corrected this: it should continue a starting sequence by generating new tokens, and compute no surprisal. They accepted the proposed defaults with two changes: prompts come from test-month days only, and the number of continuations is a control that defaults to one. |
+| 13:33 | Code design | The whole study runs from one script. It checkpoints every 10 minutes so it can be interrupted and resumed, and prints a heartbeat every minute with a status and a time estimate. The code is well organised and extensively commented. |
+| 13:34 to 13:36 | Files in the repo | The final model weights and tokeniser are committed because the GUI needs them. The data pipeline is folded into the single script. A small file of prompt excerpts for the GUI is committed too. |
+| 13:38 | Docs | A sweep to fix stale figures and align the GUI inputs. |
+
+### Implementation
+
+| Time (UTC) | Topic | What was asked or decided |
+|---|---|---|
+| 13:57 | Code | Asked for all the code to be written, from start to finish. |
+| 14:15 to 14:22 | Block-length check | The owner first agreed to score the training period for a dependence check. They then asked why it was needed, since the headline needs only the test month. They accepted the recommendation to run the check on the test month instead, which saved about two hours. |
+| 14:27 | Audit | Before running the study themselves, the owner asked for the code to be checked against every design decision. All settings matched. The remaining choices, such as the optimiser settings, were written into the design. |
+
+After this, the owner ran the full study on their laptop. The prompts from that point on are listed in the sections below.
 
 ## Prompts
 
