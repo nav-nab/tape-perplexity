@@ -7,10 +7,12 @@ Training recipe (docs/project-design.md, section 5):
 * The stream is cut into non-overlapping chunks of ``context`` events and the chunks are
   shuffled (the order is fixed by the seed). Chunk ``c`` feeds the model tokens
   ``[c*L, c*L + L)`` and asks it to predict ``[c*L + 1, c*L + L + 1)``, so every event
-  except the very first is a prediction target exactly once.
+  in a used chunk is a prediction target once. The last partial batch of chunks (random
+  chunks, because the order is shuffled) and the events after the last full chunk are
+  left out.
 * AdamW, peak learning rate 1e-3, short linear warm-up, cosine decay to 10% of the peak,
-  weight decay 0.1 (on weight matrices only), gradient clipping at 1.0, about 16,000
-  tokens per step, no dropout.
+  weight decay 0.1 (on weight matrices and embeddings, not on biases or layer norms),
+  gradient clipping at 1.0, about 16,000 tokens per step, no dropout.
 * The *final training loss* is the mean batch loss over the last 10% of steps. The
   seed with the lowest value is the one used for every result. The test month plays no
   part in the choice.

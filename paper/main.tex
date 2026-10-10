@@ -108,7 +108,7 @@ The appendices give the market terms, the tokeniser, the model, the statistics, 
   \draw[arr] (s.east) -- (r.north west);
   \draw[arr] (rv.east) -- (r.south west);
 \end{tikzpicture}
-\caption{The design. Trade records are merged into events and each event becomes a token. A transformer trained on September and October scores each event of November by its surprisal. The rolling mean surprisal is compared with the realised volatility computed from the same events. The strip at the top shows a stretch of tokens: colour is the side, dot size is the trade size, and the tail is the price move.}
+\caption{The design. Trade records are merged into events and each event becomes a token. A transformer trained on September and October scores each event of November by its surprisal. The rolling mean surprisal is compared with the realised volatility computed from the same events. The strip at the top shows an invented sequence of tokens, for illustration: colour is the side, dot size is the trade size, and the tail is the price move.}
 \label{fig:design}
 \end{figure}
 
@@ -138,7 +138,7 @@ The tokens carry no timestamps (\cref{app:tokens}).
 \Cref{fig:key} shows how we draw tokens.
 Each token is a comet: the colour is the side, the radius of the dot is the size bin, and the tail records the price move.
 The tail trails behind the dot, so a rising price puts the dot high with a tail below it, and a falling price does the opposite.
-The strip at the top of \cref{fig:design} is a stretch of tokens drawn this way.
+The strip at the top of \cref{fig:design} is an invented sequence of tokens drawn this way. It is not real data.
 
 \begin{figure}[t]
 \centering
@@ -244,6 +244,8 @@ The contributions of size and price move overlap, because large trades often cau
 
 \textbf{Little of the model's gain comes from the volatility level.}
 A model that knew only the volatility decile before each event would gain \LevelGain{} nats over the benchmark.
+Of this, \ShiftGain{} nats come from a difference between the token frequencies of the training period and those of the test month.
+The other \LevelPure{} nats come from the volatility level.
 The transformer gains \ModelGain{} nats.
 Knowing how volatile the market is therefore explains about \LevelShare{} of the improvement (\cref{app:rarity}).
 
@@ -313,7 +315,7 @@ The volatility measure is realised volatility \citep{andersen2003}, here compute
 Event time is a transaction clock, and the cumulative number of trades is a better stochastic clock than volume for obtaining near-normal returns \citep{ane2000}.
 Volatility clustering and the other stylised facts are reviewed by \citet{cont2001,cont2007}.
 Trading volume is positively related to the size of price changes \citep{karpoff1987}, which is consistent with the link between trade size and volatility in \cref{sec:rarity}.
-The moving-block bootstrap is due to \citet{kunsch1989}.
+The moving-block bootstrap was introduced by \citet{kunsch1989} and, independently, by \citet{liu1992}.
 Automatic block-length rules exist \citep{politis2004,patton2009}, and we chose the length from the dependence of the series (\cref{app:stats}).
 
 %% ------------------------------------------------------------------------------------
@@ -398,7 +400,7 @@ From 1 January 2025 the spot timestamps are in microseconds.
 
 \paragraph{Cleaning.}
 \begin{itemize}
-  \item Records with zero price or zero quantity are audit duplicates and are dropped.
+  \item Records with zero price or zero quantity would be dropped. None occur in these data.
   \item Records are ordered by aggregate trade identifier.
 \end{itemize}
 
@@ -509,7 +511,9 @@ Software & PyTorch \citep{paszke2019} \\
 \paragraph{Training data.}
 The training stream is cut into non-overlapping chunks of 512 events, giving 60{,}853 chunks, and the chunks are shuffled with a fixed seed.
 The input is 512 consecutive events and the target is the same events shifted by one.
-The last partial batch of 21 chunks is dropped, so the final 10{,}752 events of the training period are not used as targets.
+The last partial batch of 21 chunks is dropped.
+The chunk order is shuffled, so these 21 chunks (10{,}752 events) lie at random places in the training period, and they differ between seeds.
+The 278 events after the last full chunk are also left out.
 The single pass means that every batch is new data, and there is no separate validation set.
 
 \paragraph{Seed choice.}
@@ -570,7 +574,7 @@ In the headline statistic $\RV_t$ is floored at $10^{-3}$ ticks before the logar
 
 \paragraph{Moving-block bootstrap.}
 Let $(x_t,y_t)_{t=1}^n$ be the series of $S_t$ and $\log\RV_t$ over the test month, with $n=\NEval{}$.
-With block length $b$, the blocks are all windows of $b$ consecutive pairs.
+With block length $b$, the blocks are all windows of $b$ consecutive pairs \citep{kunsch1989,liu1992}.
 A replicate has three steps.
 \begin{enumerate}
   \item Draw $\lceil n/b\rceil$ block starts uniformly with replacement.
@@ -578,7 +582,7 @@ A replicate has three steps.
   \item Recompute the correlation.
 \end{enumerate}
 We use $b=\BlockLen{}$ and \NBoot{} replicates.
-The interval is the 2.5th and 97.5th percentiles of the replicates \citep{kunsch1989}.
+The interval is the 2.5th and 97.5th percentiles of the replicates.
 Each replicate needs only the five sums $\sum x$, $\sum y$, $\sum x^2$, $\sum y^2$ and $\sum xy$ over its blocks.
 These are differences of prefix sums, evaluated at the few thousand positions that are needed, so \NBoot{} replicates over \NEval{} events run in seconds.
 
@@ -631,7 +635,7 @@ On the held-out part, any $\alpha$ between 0.1 and 2 gives a mean surprisal with
 The slope is the change of the rolling mean surprisal in nats per unit of $\log\RV$.
 Better models are less surprised on average.
 Their correlation with volatility is lower.
-Their slopes are not lower, so the lower correlation comes from more spread in the surprisal that is unrelated to volatility.
+Both have higher slopes than the rarity benchmark, so the lower correlation comes from more spread in the surprisal that is unrelated to volatility.
 
 \begin{table}[h]
 \centering\small
@@ -644,6 +648,8 @@ Their slopes are not lower, so the lower correlation comes from more spread in t
 \Cref{tab:deciles} gives the numbers behind \cref{fig:benchmark}a.
 \Cref{fig:level} adds a model that knows only the volatility decile before each event.
 Its score is the empirical entropy, in nats, of the token distribution among events whose preceding volatility lies in the decile, computed on the test month.
+Because it is computed on the test month, it also absorbs the difference between training and test token frequencies.
+The entropy of the test-month token distribution without conditioning on volatility is \EntFlat{} nats, against \MeanRar{} for the benchmark.
 The entropy rises from \EntLow{} nats in the calmest decile to \EntHigh{} in the most volatile.
 
 \begin{table}[h]

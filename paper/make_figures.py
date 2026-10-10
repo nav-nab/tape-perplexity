@@ -164,6 +164,10 @@ def main() -> None:
         ent[i] = -(p * np.log(p)).sum()
     ent_all = float(sum(ent[i] * (bdec == i).mean() for i in range(10)))
     rar_ctx = float(rar[tt_i].mean())
+    # entropy of the token distribution on the test month without conditioning on volatility
+    c0 = np.bincount(tt[tt_i], minlength=V).astype(float)
+    p0 = c0[c0 > 0] / c0.sum()
+    ent_flat = float(-(p0 * np.log(p0)).sum())
 
     # --------------------------------------------------------------- daily
     day = (t_s // 86400).astype(int)
@@ -399,7 +403,9 @@ def main() -> None:
     def pct(v, d=1):
         return f"{100 * v:.{d}f}\\%"
     fl_mean, nf_mean = float(S[flag].mean()), float(S[~flag].mean())
-    lvl_gain = rar_ctx - ent_all
+    lvl_gain = rar_ctx - ent_all            # level-only model, fitted on the test month, vs the benchmark
+    shift_gain = rar_ctx - ent_flat         # part of that due to train-to-test change in token frequencies
+    lvl_pure = ent_flat - ent_all           # part due to knowing the volatility level
     mod_gain = rar_ctx - float(surp[tt_i].mean())
     n = {
         "NTrain": f"{n_train:,}".replace(",", "\\,"), "NTest": f"{n_test:,}".replace(",", "\\,"),
@@ -417,7 +423,8 @@ def main() -> None:
         "FieldSide": f"{field_r['side']:.2f}", "FieldSize": f"{field_r['size']:.2f}", "FieldMove": f"{field_r['move']:.2f}",
         "PrevAlpha": f"{a_s:g}",
         "PrevShare": pct((lad['rarity']['mean'] - lad['prev']['mean']) / (lad['rarity']['mean'] - lad['model']['mean']), 0),
-        "LevelGain": f"{lvl_gain:.2f}", "ModelGain": f"{mod_gain:.2f}", "LevelShare": pct(lvl_gain / mod_gain, 0),
+        "LevelGain": f"{lvl_gain:.3f}", "ShiftGain": f"{shift_gain:.3f}", "LevelPure": f"{lvl_pure:.3f}",
+        "ModelGain": f"{mod_gain:.2f}", "LevelShare": pct(lvl_pure / mod_gain, 0), "EntFlat": f"{ent_flat:.2f}",
         "EntLow": f"{ent[0]:.2f}", "EntHigh": f"{ent[9]:.2f}",
         "BigCalm": pct(np.mean([share_big(dec == 0)]), 0), "BigVol": pct(np.mean([share_big(dec == 9)]), 0),
         "SeedBest": sel["seed"], "SeedSpread": f"{sel['spread']:.4f}",
