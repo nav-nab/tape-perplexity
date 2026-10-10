@@ -34,13 +34,11 @@
 \noindent
 We train a small causal transformer on a tokenised sequence of Bitcoin trades and ask whether its surprise tracks market volatility.
 Each trade event becomes one token that records its side, its size and the price move it causes.
-The model is trained on two months and scored on the following month, which holds \NTest{} events.
-Its rolling mean surprisal correlates with realised volatility at \Corr{} (95\% block-bootstrap interval \CorrLo{} to \CorrHi{}).
+The model is trained on two months and scored on the following month, which holds approximately 20M events.
+Its rolling mean surprisal correlates with realised volatility at \Corr{}.
 A simple benchmark shows that part of this link is built in, because large price moves are rare tokens and also make up volatility.
 The model is nevertheless far less surprised than a benchmark that scores each event only by how rare its token is.
 It stays about \GapHigh{} nats below the benchmark even in the most volatile tenth of the month.
-The result is one of detection.
-We make no claim that surprisal leads or predicts volatility.
 \end{abstract}
 
 %% ------------------------------------------------------------------------------------
@@ -53,7 +51,8 @@ Perplexity, the exponential of the mean surprisal, is the standard summary of ho
 We ask whether the perplexity of a transformer trained on the trade tape rises when the market is volatile.
 
 We treat the tape as a language.
-Each trade event, meaning one taker order, becomes one token that records its side, its size and the price move it causes.
+Each trade event, meaning one taker order (an order that executes immediately against orders already resting in the market), becomes one token that records its side, its size and the price move it causes.
+No knowledge of finance is assumed, and \cref{app:data} explains the terms used.
 The vocabulary has \Vocab{} tokens.
 A small causal transformer is trained on two months of Bitcoin trades and then frozen.
 We score every event of the following month by its surprisal.
@@ -86,25 +85,26 @@ The appendices give the data, the tokeniser, the model, the statistics and the d
 \centering
 \includegraphics[width=\linewidth]{figures/tape.png}\\[6pt]
 \begin{tikzpicture}[
-  box/.style={draw,rounded corners=2pt,align=center,font=\scriptsize,minimum height=9mm,minimum width=22mm,inner sep=2pt},
+  box/.style={draw,rounded corners=2pt,align=center,font=\scriptsize,minimum height=9mm,minimum width=19mm,inner sep=2pt},
+  res/.style={box,fill=green!18,draw=green!50!black},
   arr/.style={-{Stealth[length=2mm]},thick},
-  node distance=5mm]
+  node distance=4mm]
   \node[box] (rec) {trade\\records};
   \node[box,right=of rec] (ev) {events\\(one per order)};
   \node[box,right=of ev] (tok) {tokens\\(side, size, move)};
   \node[box,right=of tok] (gpt) {transformer\\(next token)};
-  \node[box,right=of gpt] (s) {surprisal $s_t$,\\mean $S_t$};
+  \node[box,right=of gpt] (s) {mean\\surprisal $S_t$};
   \node[box,below=6mm of tok] (mv) {price moves $\Delta_t$};
-  \node[box,below=6mm of gpt] (rv) {volatility $\RV_t$};
-  \node[box,below=6mm of s] (r) {correlation $r$};
+  \node[box,below=6mm of s] (rv) {volatility $\RV_t$};
+  \node[res,right=9mm of s,yshift=-7.5mm] (r) {correlation\\$r$};
   \draw[arr] (rec) -- (ev);
   \draw[arr] (ev) -- (tok);
   \draw[arr] (tok) -- (gpt);
   \draw[arr] (gpt) -- (s);
   \draw[arr] (ev) |- (mv);
   \draw[arr] (mv) -- (rv);
-  \draw[arr] (rv) -- (r);
-  \draw[arr] (s) -- (r);
+  \draw[arr] (s.east) -- (r.north west);
+  \draw[arr] (rv.east) -- (r.south west);
 \end{tikzpicture}
 \caption{The design. Trade records are merged into events and each event becomes a token. A transformer trained on September and October scores each event of November by its surprisal. The rolling mean surprisal is compared with the realised volatility computed from the same events. The strip at the top shows a stretch of tokens: colour is the side, dot size is the trade size, and the tail is the price move.}
 \label{fig:design}
@@ -113,21 +113,37 @@ The appendices give the data, the tokeniser, the model, the statistics and the d
 \subsection{Data and tokens}
 
 The data are the aggregate trades of BTCUSDT on Binance spot \citep{binance}.
+BTCUSDT is Bitcoin traded against USDT, a token pegged to the US dollar, and spot means immediate settlement.
+\Cref{app:data} explains this and the other market terms we use.
 We use 91 days from 1 September to 30 November 2025 (UTC).
 September and October form the training period (61 days) and November is the test month (30 days).
 The split is chronological.
 
-A taker order that sweeps several price levels appears as several consecutive records.
+A taker order that is large enough to sweep several price levels appears as several consecutive records.
 We merge consecutive records into one event when they share the side and the timestamp, and the price continues in the aggressor's direction.
 This gives 51.8 million events from 101.8 million records (\cref{app:data}).
 
 Each event becomes one token with three fields.
-The side is buy or sell.
-The size is binned on a logarithmic scale, with three bins per decade and \NSize{} bins in total.
-The price move is the change in the last fill price from the previous event, in ticks of 0.01 USDT.
-It falls into one of seven classes: flat, one tick up or down, and a mid or large move in each direction.
+\begin{itemize}
+  \item \textbf{Side:} buy or sell, according to which party took the liquidity.
+  \item \textbf{Size:} the quantity traded, binned on a logarithmic scale with three bins per decade and \NSize{} bins in total.
+  \item \textbf{Price move:} the change in the last fill price from the previous event, in ticks of 0.01 USDT (the smallest price step).
+  It falls into one of seven classes: flat, one tick up or down, and a mid or large move in each direction.
+\end{itemize}
 The vocabulary is $2\times\NSize\times 7=\Vocab{}$.
 The tokens carry no timestamps (\cref{app:tokens}).
+
+\Cref{fig:key} shows how we draw tokens.
+Each token is a comet: the colour is the side, the radius of the dot is the size bin, and the tail records the price move.
+The tail trails behind the dot, so a rising price puts the dot high with a tail below it, and a falling price does the opposite.
+The strip at the top of \cref{fig:design} is a stretch of tokens drawn this way.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/token_key.pdf}
+\caption{Key to the token icons, for a sample of five of the \NSize{} size bins. Columns are the seven price-move classes, from a large fall to a large rise. Rows are size bins from small to large, and the dot radius grows with the bin. Blue marks a buy and orange a sell.}
+\label{fig:key}
+\end{figure}
 
 \subsection{Model and scoring}
 
@@ -216,11 +232,12 @@ Large price moves are rare tokens, and they are also what volatility is made of.
 The rolling mean of the benchmark correlates with volatility at \RarCorr{}, above the model's \ModCorr{}.
 The correlation of \cref{sec:surprised} therefore does not by itself show that the model has learned anything about sequences.
 The decomposition in \cref{fig:benchmark}b shows where the link comes from.
-Rarity of the price move correlates at \FieldMove{}.
-This is expected by construction, because volatility is computed from price moves.
-Rarity of the trade size correlates at \FieldSize{}.
-Size does not enter the volatility measure, so this part is market behaviour: trades are larger when the market is volatile.
-Rarity of the side shows no correlation (\FieldSide{}).
+It scores each field of the token separately.
+\begin{itemize}
+  \item \textbf{Price move:} the correlation is \FieldMove{}. This is expected by construction, because volatility is computed from price moves.
+  \item \textbf{Size:} the correlation is \FieldSize{}. Size does not enter the volatility measure, so this part is market behaviour: trades are larger when the market is volatile.
+  \item \textbf{Side:} there is no correlation (\FieldSide{}).
+\end{itemize}
 The contributions of size and price move overlap, because large trades often cause large moves, and they should not be added.
 
 \textbf{Little of the model's gain comes from the volatility level.}
@@ -247,7 +264,9 @@ We have not tested whether this explains the flattening.
 
 \textbf{What the model has learned.}
 Most of the model's gain over the benchmark is local.
-A model that sees only the previous token reaches \PrevShare{} of it (\cref{app:rarity}).
+A count-based model that sees only the previous token reaches \PrevShare{} of it (\cref{app:rarity}).
+This model is a table of next-token frequencies given the previous token, estimated on the whole training period, and it is not a neural network.
+The transformer has a gain of \ModelGain{} nats over the benchmark, and most of that gain is available from one event of context.
 The training loss falls by about 0.14 nats as the history grows from a few events to several hundred (\cref{app:model}).
 We do not claim that the model uses long context.
 
@@ -256,15 +275,10 @@ We do not claim that the model uses long context.
 
 \textbf{One model, one month, one market.}
 Only the selected seed was scored.
-The three seeds finished with training losses \SeedSpread{} nats apart, which exceeds the 0.01 nats at which we had planned to discuss relying on a single seed.
-The other two seeds were not scored, so variation of the correlation across seeds is not measured.
-The interval reflects resampling of the test month.
-The data are one asset on one venue over one month, and the test month is milder than the training period: \FlagShare{} of test events are flagged, against 10\% of training events, which is the definition of the threshold.
-
-\textbf{Analysis added after the main result.}
-The model, the windows $N$ and $M$, the regime threshold, the statistic and the interval were fixed before scoring.
-The rarity benchmark, the decomposition by token field, the previous-token model and the entropy given the volatility level were designed afterwards, to interpret the result.
-They are descriptive.
+The final training losses of the three seeds differ by \SeedSpread{} nats, and the variation of the correlation across training runs is not measured.
+The interval reflects resampling of the test month only.
+The data are one asset on one venue over one month.
+The test month is milder than the training period: \FlagShare{} of test events are in the high-volatility regime, against 10\% of training events, which is the definition of the threshold.
 
 \textbf{Interval and windows.}
 The interval depends on the block length.
@@ -282,10 +296,12 @@ We do not test lead or lag, and we do not compare with volatility forecasts such
 %% ------------------------------------------------------------------------------------
 \section{Related work}\label{sec:related}
 
-Several works build generative models of order flow from tokens.
-\citet{nagy2023} tokenise limit order book messages by digit groups and train a state-space model on them.
-\citet{linna2025} train a BERT-style model with one token per message.
-\citet{ansari2024} tokenise general time series by scaling and quantisation.
+Several works build generative models of order flow or of time series from tokens.
+\begin{itemize}
+  \item \citet{nagy2023} tokenise limit order book messages by digit groups and train a state-space model on them.
+  \item \citet{linna2025} train a BERT-style model with one token per message.
+  \item \citet{ansari2024} tokenise general time series by scaling and quantisation.
+\end{itemize}
 These works study generation or forecasting.
 We did not find prior work that uses the surprisal of such a model as an indicator of the volatility regime.
 Our search was not exhaustive.
@@ -320,19 +336,68 @@ Beyond the initial project design, this project's code, analysis and this write-
 %% ====================================================================================
 \appendix
 
-\section{Data and events}\label{app:data}
+\section{Market terms and data}\label{app:data}
+
+\paragraph{Market.}
+A crypto exchange such as Binance runs a marketplace where people trade one asset for another.
+BTCUSDT is the market in which Bitcoin (BTC) is bought and sold for USDT, a token whose value is pegged to the US dollar.
+The price is the number of USDT per BTC.
+A spot market settles trades immediately, as opposed to derivatives such as futures.
+
+\paragraph{Order book, maker and taker.}
+The exchange keeps an order book, a list of orders that are waiting to trade.
+Each waiting order states a side (buy or sell), a price and a quantity, and is also called a limit order.
+Buy orders are bids and sell orders are asks.
+A trade happens when a new order meets a waiting order at an acceptable price.
+\begin{itemize}
+  \item A \emph{maker} order waits in the book and provides liquidity, meaning the chance for others to trade.
+  \item A \emph{taker} order executes at once against waiting orders and removes liquidity.
+  A market order is a taker order.
+  \item The taker is the \emph{aggressor} of a trade.
+  The side of a trade is the side of its taker.
+  A buy taker consumes the lowest asks, which tends to raise the price, and a sell taker consumes the highest bids, which tends to lower it.
+\end{itemize}
+
+\paragraph{Sweeping.}
+A waiting order has only a limited quantity.
+A taker order larger than the quantity at the best price continues to the next price, and so on.
+It is said to sweep several price levels.
+The exchange reports the fill at each level as a separate trade, so one taker order can produce several records at the same instant and at steadily worse prices.
+
+\paragraph{Aggregate trade records.}
+Binance publishes aggregate trades, in which fills of one taker order at the same price are already combined.
+Each record has the following fields.
+\begin{itemize}
+  \item An aggregate trade identifier that increases with time.
+  \item A price and a quantity.
+  \item A timestamp.
+  \item A flag for whether the buyer was the maker.
+  The aggressor is the seller when the buyer was the maker, and the buyer otherwise.
+\end{itemize}
+
+\paragraph{Units.}
+A tick is the smallest price step, which is 0.01 USDT for BTCUSDT.
+We write the price move of an event in ticks.
+We count quantities in lots of $10^{-5}$ BTC.
+Prices and quantities are held as integers in these units, so that no comparison involves rounding.
+
+\paragraph{Volatility.}
+Volatility measures how large the price changes are.
+Realised volatility is computed from observed changes and not from a model.
+We define it in event time in \cref{sec:method}.
+Markets move between calm periods and volatile ones, which are called regimes, and large changes tend to cluster together.
+We call a period a high-volatility regime when volatility is above a fixed threshold.
 
 \paragraph{Source.}
-The files are the daily \texttt{aggTrades} archives for BTCUSDT spot from \texttt{data.binance.vision} \citep{binance}.
+The files are the daily \texttt{aggTrades} archives for BTCUSDT spot from \url{data.binance.vision} \citep{binance}.
 Each file has a checksum, and every file was verified.
 From 1 January 2025 the spot timestamps are in microseconds.
-Each record has an aggregate trade identifier, a price, a quantity, a timestamp and a flag for whether the buyer was the maker.
-The aggressor is the seller when the buyer was the maker, and the buyer otherwise.
 
 \paragraph{Cleaning.}
-Records with zero price or zero quantity are audit duplicates and are dropped.
-Records are ordered by aggregate trade identifier.
-Prices are held as integers in ticks of 0.01 USDT and quantities as integers in lots of $10^{-5}$ BTC, so that no comparison involves rounding.
+\begin{itemize}
+  \item Records with zero price or zero quantity are audit duplicates and are dropped.
+  \item Records are ordered by aggregate trade identifier.
+\end{itemize}
 
 \paragraph{Merging records into events.}
 An event is one taker order.
@@ -400,8 +465,10 @@ This reduces the 16 raw bins to \NSize{}.
 \end{table}
 
 \paragraph{Icons.}
-The strip in \cref{fig:design} draws each token as a dot with a tail.
-Colour is the side, dot radius is the size bin, and the tail points against the move with a length that grows with the move class.
+\Cref{fig:key} and the strip in \cref{fig:design} draw each token as a dot with a tail.
+Colour is the side and dot radius is the size bin.
+The tail points against the move, and its length is 4, 8 or 14 units on a 32-unit tile for a move of one tick, a mid move or a large move.
+The tail extends that distance beyond the edge of the dot, whatever the size of the dot.
 
 %% ------------------------------------------------------------------------------------
 \section{Model and training}\label{app:model}
@@ -501,7 +568,12 @@ In the headline statistic $\RV_t$ is floored at $10^{-3}$ ticks before the logar
 \paragraph{Moving-block bootstrap.}
 Let $(x_t,y_t)_{t=1}^n$ be the series of $S_t$ and $\log\RV_t$ over the test month, with $n=\NEval{}$.
 With block length $b$, the blocks are all windows of $b$ consecutive pairs.
-A replicate draws $\lceil n/b\rceil$ block starts uniformly with replacement, glues the blocks, cuts the result to length $n$, and recomputes the correlation.
+A replicate has three steps.
+\begin{enumerate}
+  \item Draw $\lceil n/b\rceil$ block starts uniformly with replacement.
+  \item Glue the blocks and cut the result to length $n$.
+  \item Recompute the correlation.
+\end{enumerate}
 We use $b=\BlockLen{}$ and \NBoot{} replicates.
 The interval is the 2.5th and 97.5th percentiles of the replicates \citep{kunsch1989}.
 Each replicate needs only the five sums $\sum x$, $\sum y$, $\sum x^2$, $\sum y^2$ and $\sum xy$ over its blocks.
@@ -549,7 +621,10 @@ The benchmark uses the training period only.
 
 \paragraph{Ladder of scoring rules.}
 \Cref{tab:ladder} adds a model that sees only the previous token.
-It estimates the next-token distribution from the training counts of pairs, smoothed towards the token frequencies.
+It is a table of next-token frequencies given the previous token, counted over the whole training period, and it is not a neural network.
+The counts are smoothed towards the token frequencies, by adding $\alpha\times\Vocab{}$ pseudo-counts spread according to those frequencies.
+We chose $\alpha=\PrevAlpha{}$ by fitting the counts on the first 85\% of the training period and scoring the last 15\%, and then refitted the counts on all of it.
+On the held-out part, any $\alpha$ between 0.1 and 2 gives a mean surprisal within 0.001 nats of the best.
 The slope is the change of the rolling mean surprisal in nats per unit of $\log\RV$.
 Better models are less surprised on average.
 Their correlation with volatility is lower.
@@ -610,7 +685,13 @@ Flat moves are the least surprising, and large trades are the most surprising.
 \section{Reproducibility}\label{app:repro}
 
 The whole study runs from one script, \texttt{python run.py}.
-It downloads and verifies the data, builds events and tokens, trains the three seeds, selects one, scores the test month, evaluates, and exports the weights.
+It performs these steps in order.
+\begin{enumerate}
+  \item Download and verify the data.
+  \item Build events and tokens.
+  \item Train the three seeds and select one.
+  \item Score the test month, evaluate, and export the weights.
+\end{enumerate}
 It writes a checkpoint every 10 minutes of wall time, so that an interrupted run can resume, and it prints a status line with an estimated time to completion every minute.
 On a laptop with a four-core Intel i5-1038NG7 CPU and no GPU, a full run takes about six hours of computation.
 Each seed trains for about \TrainMinutes{} minutes and the scoring takes about two hours.

@@ -95,15 +95,29 @@ def main() -> None:
     rar_tab = -np.log(cnt / cnt.sum())
     rar = rar_tab[tt].astype(np.float32)
     Rr = rolling_mean(rar, N)
-    # previous-token model (fit on training; add-2 smoothing towards the token frequencies)
+    # previous-token model: counts of (previous, next) pairs over the whole training stream,
+    # smoothed towards the token frequencies with strength alpha. alpha is chosen on the last
+    # 15% of the training stream with the counts fitted on the first 85%, then the counts are
+    # refitted on all of it.
+    def pair_counts(x):
+        return np.bincount(x[:-1] * V + x[1:], minlength=V * V).reshape(V, V).astype(np.float64)
+
+    def pair_logp(pc, pr, prev_tok, next_tok, a):
+        tot_ = pc.sum(1)
+        return np.log((pc[prev_tok, next_tok] + a * V * pr[next_tok]) / (tot_[prev_tok] + a * V))
+
+    cut = int(0.85 * len(tr))
+    pc_a = pair_counts(tr[:cut])
+    pr_a = (np.bincount(tr[:cut], minlength=V) + 0.5)
+    pr_a = pr_a / pr_a.sum()
+    alphas = [0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
+    held = {a_: float(-pair_logp(pc_a, pr_a, tr[cut - 1:-1], tr[cut:], a_).mean()) for a_ in alphas}
+    a_s = min(held, key=held.get)
     prior = cnt / cnt.sum()
-    pair = np.zeros((V, V), dtype=np.float64)
-    np.add.at(pair, (tr[:-1], tr[1:]), 1.0)
-    tot = pair.sum(1)
-    a_s = 2.0
+    pair = pair_counts(tr)
     p_prev = np.empty(n_test)
     p_prev[0] = prior[tt[0]]
-    p_prev[1:] = (pair[tt[:-1], tt[1:]] + a_s * V * prior[tt[1:]]) / (tot[tt[:-1]] + a_s * V)
+    p_prev[1:] = np.exp(pair_logp(pair, prior, tt[:-1], tt[1:], a_s))
     prev = (-np.log(p_prev)).astype(np.float32)
     Rp = rolling_mean(prev, N)
 
@@ -235,7 +249,7 @@ def main() -> None:
     plt.close(fig)
 
     # 3. benchmark
-    fig, (a, b) = plt.subplots(1, 2, figsize=(W, 2.9), gridspec_kw={"width_ratios": [1.5, 1]})
+    fig, (a, b) = plt.subplots(1, 2, figsize=(W, 2.9), gridspec_kw={"width_ratios": [1.35, 1]})
     a.plot(x, dR, color=GREY, marker="o", ms=4, label="rarity benchmark")
     a.plot(x, dS, color=BLUE, marker="o", ms=4, label="transformer")
     mid = 6
@@ -246,17 +260,20 @@ def main() -> None:
     a.set_ylabel("mean surprisal (nats)")
     a.set_title("(a) Surprisal by volatility decile")
     a.legend(loc="lower right")
-    names = ["side", "size", "price move", "whole token"]
-    vals = [field_r["side"], field_r["size"], field_r["move"], lad["rarity"]["r"]]
-    b.bar(range(4), vals, color=[GREY, GREY, GREY, "#5a5955"], width=0.6)
+    names = ["side", "size", "price\nmove", "whole\ntoken", "trans-\nformer"]
+    vals = [field_r["side"], field_r["size"], field_r["move"], lad["rarity"]["r"], lad["model"]["r"]]
+    b.bar(range(5), vals, color=[GREY, GREY, GREY, "#5a5955", BLUE], width=0.6)
     for i, v in enumerate(vals):
         b.text(i, v + (0.02 if v >= 0 else -0.07), f"{v:.2f}", ha="center", fontsize=8, color=INK)
-    b.set_xticks(range(4))
-    b.set_xticklabels(names, rotation=20, ha="right")
-    b.set_ylim(-0.12, 0.8)
+    b.set_xticks(range(5))
+    b.set_xticklabels(names, fontsize=8)
+    b.set_ylim(-0.12, 0.95)
     b.set_ylabel("correlation with log volatility")
-    b.set_title("(b) Rarity, by token field")
+    b.set_title("(b) Correlation with volatility")
     b.grid(axis="x", visible=False)
+    from matplotlib.patches import Patch
+    b.legend(handles=[Patch(color=GREY, label="rarity benchmark"), Patch(color=BLUE, label="transformer")],
+             loc="upper left", fontsize=7.5)
     fig.tight_layout()
     fig.savefig(fig_dir / "benchmark.pdf")
     plt.close(fig)
@@ -339,6 +356,41 @@ def main() -> None:
     fig.savefig(fig_dir / "level_only.pdf")
     plt.close(fig)
 
+    # 8. token key: the comet icons
+    from matplotlib.patches import FancyBboxPatch, Circle, Polygon
+    BUYC, SELLC, TILE = "#2563EB", "#E8590C", "#E9ECF2"
+    T_LEN = [14, 8, 4, 0, 4, 8, 14]
+    DIRN = [-1, -1, -1, 0, 1, 1, 1]
+    rows = sorted(set([0, ns // 4, ns // 2, (3 * ns) // 4, ns - 1]))
+    pitch = 38.0
+    fig, axs = plt.subplots(1, 2, figsize=(W, 2.95))
+    for k, (ax, col, ttl) in enumerate(zip(axs, (BUYC, SELLC), ("(a) Buy orders", "(b) Sell orders"))):
+        ax.set_xlim(-6, 7 * pitch - 2)
+        ax.set_ylim(len(rows) * pitch - 4, -2)
+        ax.set_aspect("equal")
+        ax.axis("off")
+        ax.set_title(ttl, loc="left", color=col)
+        for ri, sbin in enumerate(rows):
+            for m in range(7):
+                x0, y0 = m * pitch, ri * pitch
+                ax.add_patch(FancyBboxPatch((x0, y0), 32, 32, boxstyle="round,pad=0,rounding_size=5", fc=TILE, ec="none"))
+                r_, T, d = 1.6 + 0.42 * sbin, T_LEN[m], DIRN[m]
+                cy = 16 - d * T / 2
+                tip = cy + d * (r_ + T)
+                if d != 0:
+                    ax.add_patch(Polygon([(x0 + 16 - 0.8 * r_, y0 + cy), (x0 + 16 + 0.8 * r_, y0 + cy), (x0 + 16, y0 + tip)],
+                                         closed=True, fc=col, ec="none", alpha=0.5))
+                ax.add_patch(Circle((x0 + 16, y0 + cy), r_, fc=col, ec="none"))
+        labels = ["down\nlarge", "down\nmid", "down\n1 tick", "flat", "up\n1 tick", "up\nmid", "up\nlarge"]
+        for m in range(7):
+            ax.text(m * pitch + 16, len(rows) * pitch - 1, labels[m], ha="center", va="top", fontsize=6.5, color=INK2)
+        if k == 0:
+            for ri, sbin in enumerate(rows):
+                ax.text(-2, ri * pitch + 16, f"bin {sbin + 1}", ha="right", va="center", fontsize=7, color=INK2)
+    fig.tight_layout()
+    fig.savefig(fig_dir / "token_key.pdf")
+    plt.close(fig)
+
     def tex(v):
         v = str(v)
         return "$-$" + v[1:] if v.startswith("-") else v          # a proper minus sign in running text
@@ -363,6 +415,7 @@ def main() -> None:
         "RarCorr": f"{lad['rarity']['r']:.2f}", "PrevCorr": f"{lad['prev']['r']:.2f}",
         "PrevMean": f"{lad['prev']['mean']:.2f}", "ModCorr": f"{lad['model']['r']:.2f}",
         "FieldSide": f"{field_r['side']:.2f}", "FieldSize": f"{field_r['size']:.2f}", "FieldMove": f"{field_r['move']:.2f}",
+        "PrevAlpha": f"{a_s:g}",
         "PrevShare": pct((lad['rarity']['mean'] - lad['prev']['mean']) / (lad['rarity']['mean'] - lad['model']['mean']), 0),
         "LevelGain": f"{lvl_gain:.2f}", "ModelGain": f"{mod_gain:.2f}", "LevelShare": pct(lvl_gain / mod_gain, 0),
         "EntLow": f"{ent[0]:.2f}", "EntHigh": f"{ent[9]:.2f}",
