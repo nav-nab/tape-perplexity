@@ -1,0 +1,623 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=1.05in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\usepackage[labelfont=bf,font=small,labelsep=colon]{caption}
+\usepackage[authoryear,round]{natbib}
+\usepackage[colorlinks=true,linkcolor=blue!60!black,citecolor=blue!60!black,urlcolor=blue!60!black]{hyperref}
+\usepackage[capitalise,noabbrev]{cleveref}
+
+\input{generated/numbers.tex}
+
+\setlist{itemsep=2pt,topsep=4pt}
+\newcommand{\RV}{\mathrm{RV}}
+\newcommand{\nats}{\text{nats}}
+\crefname{appendix}{Appendix}{Appendices}
+\crefname{section}{Section}{Sections}
+
+\title{A language model of the Bitcoin trade tape\\is surprised by volatility}
+\author{Navid Nabijou\thanks{Queen Mary University of London. nn333@cantab.ac.uk}}
+\date{October 10, 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+We train a small causal transformer on a tokenised sequence of Bitcoin trades and ask whether its surprise tracks market volatility.
+Each trade event becomes one token that records its side, its size and the price move it causes.
+The model is trained on two months and scored on the following month, which holds \NTest{} events.
+Its rolling mean surprisal correlates with realised volatility at \Corr{} (95\% block-bootstrap interval \CorrLo{} to \CorrHi{}).
+A simple benchmark shows that part of this link is built in, because large price moves are rare tokens and also make up volatility.
+The model is nevertheless far less surprised than a benchmark that scores each event only by how rare its token is.
+It stays about \GapHigh{} nats below the benchmark even in the most volatile tenth of the month.
+The result is one of detection.
+We make no claim that surprisal leads or predicts volatility.
+\end{abstract}
+
+%% ------------------------------------------------------------------------------------
+\section{Introduction}
+
+Financial markets alternate between calm and turbulent regimes.
+Large price changes tend to cluster in time \citep{cont2007}, and the level of activity moves between low and high states.
+A model trained on the stream of trades could notice such a switch if it is surprised whenever the market departs from what it has learned.
+Perplexity, the exponential of the mean surprisal, is the standard summary of how surprised a language model is.
+We ask whether the perplexity of a transformer trained on the trade tape rises when the market is volatile.
+
+We treat the tape as a language.
+Each trade event, meaning one taker order, becomes one token that records its side, its size and the price move it causes.
+The vocabulary has \Vocab{} tokens.
+A small causal transformer is trained on two months of Bitcoin trades and then frozen.
+We score every event of the following month by its surprisal.
+We average the surprisal over windows of \WinN{} events and compare the average with realised volatility over the same events.
+
+The question is one of detection.
+We ask whether surprisal is high when volatility is high, at the same time.
+We do not ask whether surprisal predicts later volatility.
+
+The findings fall into two parts.
+\begin{enumerate}
+  \item \textbf{The model is surprised by volatility.}
+  Rolling mean surprisal and log realised volatility correlate at \Corr{} over \NEval{} test events, with a 95\% block-bootstrap interval of \CorrLo{} to \CorrHi{}.
+  Surprisal is \SurpGap{} nats higher in the high-volatility regime than elsewhere (\cref{sec:surprised}).
+  \item \textbf{But less surprised than rarity alone would suggest.}
+  Part of this link is built in, because large price moves are rare tokens and also make up volatility.
+  A benchmark that scores each event only by the rarity of its token averages \MeanRar{} nats per event, and the model averages \MeanSurp{}.
+  The model stays about \GapHigh{} nats below the benchmark even in the most volatile tenth of the data (\cref{sec:rarity}).
+\end{enumerate}
+
+\Cref{sec:method} describes the design.
+\Cref{sec:surprised,sec:rarity} give the two parts of the result.
+\Cref{sec:discussion} offers labelled interpretation, \cref{sec:limits} states the limitations, and \cref{sec:related} reviews related work.
+The appendices give the data, the tokeniser, the model, the statistics and the detailed results.
+
+%% ------------------------------------------------------------------------------------
+\section{Method}\label{sec:method}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/tape.png}\\[6pt]
+\begin{tikzpicture}[
+  box/.style={draw,rounded corners=2pt,align=center,font=\scriptsize,minimum height=9mm,minimum width=22mm,inner sep=2pt},
+  arr/.style={-{Stealth[length=2mm]},thick},
+  node distance=5mm]
+  \node[box] (rec) {trade\\records};
+  \node[box,right=of rec] (ev) {events\\(one per order)};
+  \node[box,right=of ev] (tok) {tokens\\(side, size, move)};
+  \node[box,right=of tok] (gpt) {transformer\\(next token)};
+  \node[box,right=of gpt] (s) {surprisal $s_t$,\\mean $S_t$};
+  \node[box,below=6mm of tok] (mv) {price moves $\Delta_t$};
+  \node[box,below=6mm of gpt] (rv) {volatility $\RV_t$};
+  \node[box,below=6mm of s] (r) {correlation $r$};
+  \draw[arr] (rec) -- (ev);
+  \draw[arr] (ev) -- (tok);
+  \draw[arr] (tok) -- (gpt);
+  \draw[arr] (gpt) -- (s);
+  \draw[arr] (ev) |- (mv);
+  \draw[arr] (mv) -- (rv);
+  \draw[arr] (rv) -- (r);
+  \draw[arr] (s) -- (r);
+\end{tikzpicture}
+\caption{The design. Trade records are merged into events and each event becomes a token. A transformer trained on September and October scores each event of November by its surprisal. The rolling mean surprisal is compared with the realised volatility computed from the same events. The strip at the top shows a stretch of tokens: colour is the side, dot size is the trade size, and the tail is the price move.}
+\label{fig:design}
+\end{figure}
+
+\subsection{Data and tokens}
+
+The data are the aggregate trades of BTCUSDT on Binance spot \citep{binance}.
+We use 91 days from 1 September to 30 November 2025 (UTC).
+September and October form the training period (61 days) and November is the test month (30 days).
+The split is chronological.
+
+A taker order that sweeps several price levels appears as several consecutive records.
+We merge consecutive records into one event when they share the side and the timestamp, and the price continues in the aggressor's direction.
+This gives 51.8 million events from 101.8 million records (\cref{app:data}).
+
+Each event becomes one token with three fields.
+The side is buy or sell.
+The size is binned on a logarithmic scale, with three bins per decade and \NSize{} bins in total.
+The price move is the change in the last fill price from the previous event, in ticks of 0.01 USDT.
+It falls into one of seven classes: flat, one tick up or down, and a mid or large move in each direction.
+The vocabulary is $2\times\NSize\times 7=\Vocab{}$.
+The tokens carry no timestamps (\cref{app:tokens}).
+
+\subsection{Model and scoring}
+
+The model is a decoder-only transformer \citep{vaswani2017,radford2019} with six layers, width 192, six attention heads, a context of 512 events and \Params{} parameters.
+It is trained by next-token cross-entropy in a single pass over the training events.
+We train three seeds with one recipe and keep the seed with the lowest final training loss.
+The weights are then frozen, and no test data enter the choice (\cref{app:model}).
+
+The surprisal of event $t$ is
+\begin{equation}
+  s_t = -\log p_\theta\!\left(x_t \mid x_{t-h},\dots,x_{t-1}\right),
+\end{equation}
+where the history length $h$ lies between 448 and 511 events for every scored event (\cref{app:scoring}).
+The rolling mean over the last $N=\WinN{}$ events is $S_t=\frac1N\sum_{i=t-N+1}^{t}s_i$.
+
+\subsection{Volatility and the statistic}
+
+Realised volatility in event time is the root mean square of the price moves $\Delta_i$ over the last $M=\WinM{}$ events,
+\begin{equation}
+  \RV_t=\Bigl(\tfrac1M\sum_{i=t-M+1}^{t}\Delta_i^2\Bigr)^{1/2}.
+\end{equation}
+Because $N=M$, the two series summarise the same events.
+The high-volatility regime is $\RV_t$ above the 90th percentile of the training period, which is \Thr{} ticks.
+The regime flag is used for shading and for the comparison in \cref{sec:surprised}.
+It does not enter the headline statistic.
+
+The headline statistic is the Pearson correlation $r$ between $S_t$ and $\log\RV_t$ over the test month.
+Both series are averages over overlapping windows, so neighbouring values are almost identical.
+We therefore compute a 95\% interval by a moving-block bootstrap with blocks of \BlockLen{} events and \NBoot{} replicates (\cref{app:stats}).
+All settings above were fixed before the model was scored.
+
+%% ------------------------------------------------------------------------------------
+\section{The model is surprised by volatility}\label{sec:surprised}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/series.pdf}
+\caption{Hourly averages over the test month, November 2025. Top: mean surprisal. Bottom: realised volatility on a log scale, with the training 90th percentile dashed. Shading marks hours in which at least a fifth of the events exceed that threshold.}
+\label{fig:series}
+\end{figure}
+
+\Cref{fig:series} shows the two series over the test month.
+Surprisal and volatility rise and fall together.
+The correlation is \Corr{} with a 95\% interval of \CorrLo{} to \CorrHi{}.
+
+The regime comparison gives the same picture.
+Mean surprisal is \SurpFlag{} nats where volatility is above the training threshold and \SurpRest{} nats elsewhere, a difference of \SurpGap{} nats.
+\Cref{fig:relation}a groups the events by volatility decile.
+Surprisal rises from \DecLow{} nats in the calmest decile to \DecNine{} in the ninth.
+It then does not rise further, and it is \DecTen{} in the tenth.
+The daily means of the 30 test days correlate at \CorrDay{} (\cref{fig:relation}b).
+That figure is a description of 30 points and not a test.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/relation.pdf}
+\caption{(a) Mean surprisal by decile of realised volatility over the test month. Bars show one standard deviation of the rolling mean within the decile. (b) Daily means of surprisal against daily geometric-mean volatility.}
+\label{fig:relation}
+\end{figure}
+
+We make no claim that surprisal leads volatility.
+Shifting one series against the other lowers the correlation on both sides of zero (\cref{app:stats}).
+That is expected from overlapping windows and carries no information about lead or lag.
+
+%% ------------------------------------------------------------------------------------
+\section{But less surprised than rarity alone would suggest}\label{sec:rarity}
+
+To judge the model we need a reference.
+Our reference is the rarity benchmark.
+It scores each test event by the surprisal of its token under the token frequencies of the training period, with no context at all.
+
+\textbf{The model is much less surprised than the benchmark.}
+Averaged over the test month, the benchmark scores \MeanRar{} nats per event and the model scores \MeanSurp{} (\cref{fig:benchmark}a).
+The gap is \GapLow{} nats in the calmest decile and \GapHigh{} nats in the most volatile one.
+What the model learned from September and October therefore still applies when the market is volatile.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/benchmark.pdf}
+\caption{(a) Mean surprisal by volatility decile for the rarity benchmark and the transformer. (b) Correlation with log volatility of the rolling mean rarity of each token field, and of the whole token.}
+\label{fig:benchmark}
+\end{figure}
+
+\textbf{Part of the link in \cref{sec:surprised} is built in.}
+Large price moves are rare tokens, and they are also what volatility is made of.
+The rolling mean of the benchmark correlates with volatility at \RarCorr{}, above the model's \ModCorr{}.
+The correlation of \cref{sec:surprised} therefore does not by itself show that the model has learned anything about sequences.
+The decomposition in \cref{fig:benchmark}b shows where the link comes from.
+Rarity of the price move correlates at \FieldMove{}.
+This is expected by construction, because volatility is computed from price moves.
+Rarity of the trade size correlates at \FieldSize{}.
+Size does not enter the volatility measure, so this part is market behaviour: trades are larger when the market is volatile.
+Rarity of the side shows no correlation (\FieldSide{}).
+The contributions of size and price move overlap, because large trades often cause large moves, and they should not be added.
+
+\textbf{Little of the model's gain comes from the volatility level.}
+A model that knew only the volatility decile before each event would gain \LevelGain{} nats over the benchmark.
+The transformer gains \ModelGain{} nats.
+Knowing how volatile the market is therefore explains about \LevelShare{} of the improvement (\cref{app:rarity}).
+
+%% ------------------------------------------------------------------------------------
+\section{Discussion}\label{sec:discussion}
+
+This section is interpretation.
+We state it because it bears on how the results should be read.
+
+\textbf{Why surprisal tracks volatility.}
+A natural reading is that volatile markets are intrinsically less predictable.
+In the test month the entropy of the token distribution, given the volatility decile before the event, rises from \EntLow{} to \EntHigh{} nats across the deciles (\cref{app:rarity}).
+Even a model that knew the volatility level perfectly would be more surprised in volatile periods.
+We have not tested this reading beyond that calculation.
+
+\textbf{Why the top decile does not rise.}
+The largest price-move class is open-ended above 129 ticks, about 1.29 USDT.
+A very large move therefore falls in the same token as a moderately large one, and surprisal cannot grow once moves saturate.
+We have not tested whether this explains the flattening.
+
+\textbf{What the model has learned.}
+Most of the model's gain over the benchmark is local.
+A model that sees only the previous token reaches \PrevShare{} of it (\cref{app:rarity}).
+The training loss falls by about 0.14 nats as the history grows from a few events to several hundred (\cref{app:model}).
+We do not claim that the model uses long context.
+
+%% ------------------------------------------------------------------------------------
+\section{Limitations}\label{sec:limits}
+
+\textbf{One model, one month, one market.}
+Only the selected seed was scored.
+The three seeds finished with training losses \SeedSpread{} nats apart, which exceeds the 0.01 nats at which we had planned to discuss relying on a single seed.
+The other two seeds were not scored, so variation of the correlation across seeds is not measured.
+The interval reflects resampling of the test month.
+The data are one asset on one venue over one month, and the test month is milder than the training period: \FlagShare{} of test events are flagged, against 10\% of training events, which is the definition of the threshold.
+
+\textbf{Analysis added after the main result.}
+The model, the windows $N$ and $M$, the regime threshold, the statistic and the interval were fixed before scoring.
+The rarity benchmark, the decomposition by token field, the previous-token model and the entropy given the volatility level were designed afterwards, to interpret the result.
+They are descriptive.
+
+\textbf{Interval and windows.}
+The interval depends on the block length.
+The bootstrap standard error rises with block length and levels off near the length we used (\cref{app:stats}).
+We did not vary $N$ or $M$.
+
+\textbf{Tokenisation.}
+We used one tokenisation and did not vary the bins.
+The benchmark's rarity depends on the training mix of tokens.
+
+\textbf{Scope.}
+The result is simultaneous.
+We do not test lead or lag, and we do not compare with volatility forecasts such as GARCH models.
+
+%% ------------------------------------------------------------------------------------
+\section{Related work}\label{sec:related}
+
+Several works build generative models of order flow from tokens.
+\citet{nagy2023} tokenise limit order book messages by digit groups and train a state-space model on them.
+\citet{linna2025} train a BERT-style model with one token per message.
+\citet{ansari2024} tokenise general time series by scaling and quantisation.
+These works study generation or forecasting.
+We did not find prior work that uses the surprisal of such a model as an indicator of the volatility regime.
+Our search was not exhaustive.
+
+The volatility measure is realised volatility \citep{andersen2003}, here computed in event time.
+Event time is a transaction clock, and the cumulative number of trades is a better stochastic clock than volume for obtaining near-normal returns \citep{ane2000}.
+Volatility clustering and the other stylised facts are reviewed by \citet{cont2001,cont2007}.
+Trading volume is positively related to the size of price changes \citep{karpoff1987}, which is consistent with the link between trade size and volatility in \cref{sec:rarity}.
+The moving-block bootstrap is due to \citet{kunsch1989}.
+Automatic block-length rules exist \citep{politis2004,patton2009}, and we chose the length from the dependence of the series (\cref{app:stats}).
+
+%% ------------------------------------------------------------------------------------
+\section{Conclusion}
+
+A small transformer trained on two months of Bitcoin trades is more surprised when the market is more volatile.
+The correlation is \Corr{} on the test month, with a 95\% interval of \CorrLo{} to \CorrHi{}.
+Part of that link is built in, because large moves are rare events and also make up volatility.
+The model is nevertheless about \GapAvg{} nats less surprised than a benchmark that looks only at token rarity, and the margin holds in the most volatile decile.
+Three follow-up studies would extend the result.
+\begin{itemize}
+  \item A lead test would ask whether surprisal rises before volatility does.
+  \item Scoring the other seeds would measure the variation of the result across training runs.
+  \item Other assets and months would test whether the result is specific to this market.
+\end{itemize}
+
+\section*{Acknowledgements}
+Beyond the initial project design, this project's code, analysis and this write-up were developed in collaboration with Claude (Anthropic).
+
+\bibliographystyle{plainnat}
+\bibliography{refs}
+
+%% ====================================================================================
+\appendix
+
+\section{Data and events}\label{app:data}
+
+\paragraph{Source.}
+The files are the daily \texttt{aggTrades} archives for BTCUSDT spot from \texttt{data.binance.vision} \citep{binance}.
+Each file has a checksum, and every file was verified.
+From 1 January 2025 the spot timestamps are in microseconds.
+Each record has an aggregate trade identifier, a price, a quantity, a timestamp and a flag for whether the buyer was the maker.
+The aggressor is the seller when the buyer was the maker, and the buyer otherwise.
+
+\paragraph{Cleaning.}
+Records with zero price or zero quantity are audit duplicates and are dropped.
+Records are ordered by aggregate trade identifier.
+Prices are held as integers in ticks of 0.01 USDT and quantities as integers in lots of $10^{-5}$ BTC, so that no comparison involves rounding.
+
+\paragraph{Merging records into events.}
+An event is one taker order.
+A record joins the current event when it has the same side as the previous record, the same timestamp, and a price that continues strictly in the aggressor's direction.
+Continuing means higher for a buy and lower for a sell.
+Each day is processed on its own, and an order split by midnight within one microsecond would be cut in two, which is negligible.
+
+\Cref{tab:merge} gives a worked example.
+Four records give two events.
+The first three records are one buy order that sweeps three prices.
+The fourth record is a sell.
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{rrrrcl}
+\toprule
+Record & Price & Quantity (BTC) & Timestamp & Side & Event \\
+\midrule
+1 & 82\,000.10 & 0.0020 & $t$   & buy  & 1 \\
+2 & 82\,000.11 & 0.0150 & $t$   & buy  & 1 \\
+3 & 82\,000.13 & 0.0400 & $t$   & buy  & 1 \\
+4 & 82\,000.12 & 0.0010 & $t+1$ & sell & 2 \\
+\bottomrule
+\end{tabular}
+\caption{Merging example. Event 1 has size 0.0570 BTC and last price 82\,000.13. Its price move is measured against the last price of the previous event.}
+\label{tab:merge}
+\end{table}
+
+\paragraph{Counts.}
+The 91 files hold 101{,}818{,}559 records, which merge into 51{,}819{,}298 events (1.96 records per event).
+The first event has no previous price and is dropped.
+This leaves \NTrain{} training events and \NTest{} test events.
+
+%% ------------------------------------------------------------------------------------
+\section{Tokeniser}\label{app:tokens}
+
+\paragraph{Fields.}
+A token is $(\text{side},\text{size},\text{move})$, coded as
+\begin{equation}
+  \text{id}=(\text{side}\cdot n_{\text{size}}+\text{size})\cdot 7+\text{move},
+\end{equation}
+with side 0 for sell and 1 for buy, size from 0 to $n_{\text{size}}-1$ and move from 0 to 6.
+With $n_{\text{size}}=\NSize{}$ the vocabulary is \Vocab{}.
+
+\paragraph{Price move.}
+The move is the change in the last fill price of the event from the last fill price of the previous event, in ticks.
+\Cref{tab:vocab} (left) lists the seven classes.
+A move of 2 ticks or more is mid or large.
+It is large when it exceeds 129 ticks, which is the median of such moves in the training period, and mid otherwise.
+The boundaries are fitted on the training period only.
+
+\paragraph{Size.}
+Sizes are binned on a logarithmic scale with edges at $5\times 10^{k/3}$ lots for $k=1,\dots,15$, which is three bins per decade.
+The tail rule merges an outer bin that holds less than 1\% of the training events into its inner neighbour, and repeats until the outermost bin holds at least 1\%.
+This reduces the 16 raw bins to \NSize{}.
+\Cref{tab:vocab} (right) lists the final bins.
+
+\begin{table}[h]
+\centering\small
+\begin{minipage}[t]{0.42\linewidth}\centering\input{generated/tab_moves.tex}\end{minipage}
+\hfill
+\begin{minipage}[t]{0.52\linewidth}\centering\input{generated/tab_sizes.tex}\end{minipage}
+\caption{Left: the seven price-move classes and their shares of training events. Right: the size bins and their shares.}
+\label{tab:vocab}
+\end{table}
+
+\paragraph{Icons.}
+The strip in \cref{fig:design} draws each token as a dot with a tail.
+Colour is the side, dot radius is the size bin, and the tail points against the move with a length that grows with the move class.
+
+%% ------------------------------------------------------------------------------------
+\section{Model and training}\label{app:model}
+
+\paragraph{Architecture.}
+The model is a decoder-only transformer with pre-normalisation \citep{xiong2020}, GELU activations \citep{hendrycks2016} and learned absolute position embeddings.
+The input and output embeddings are tied \citep{press2017}.
+There is no dropout.
+\Cref{tab:hyper} lists the settings.
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{ll}
+\toprule
+Setting & Value \\
+\midrule
+Layers, width, heads & 6, 192, 6 \\
+Context & 512 events \\
+Vocabulary & \Vocab{} \\
+Parameters & \Params{} \\
+Optimiser & AdamW \citep{loshchilov2019}, $\beta=(0.9,0.95)$ \\
+Peak learning rate & $10^{-3}$, 100 warm-up steps, cosine decay to 10\% \\
+Weight decay & 0.1, on weight matrices and embeddings only \\
+Gradient clipping & 1.0 \\
+Batch & 32 chunks of 512 events (16\,384 tokens) \\
+Training & one pass, \Steps{} steps, chunks shuffled \\
+Seeds & 0, 1, 2 \\
+Software & PyTorch \citep{paszke2019} \\
+\bottomrule
+\end{tabular}
+\caption{Model and training settings.}
+\label{tab:hyper}
+\end{table}
+
+\paragraph{Training data.}
+The training stream is cut into non-overlapping chunks of 512 events, giving 60{,}853 chunks, and the chunks are shuffled with a fixed seed.
+The input is 512 consecutive events and the target is the same events shifted by one.
+The last partial batch of 21 chunks is dropped, so the final 10{,}752 events of the training period are not used as targets.
+The single pass means that every batch is new data, and there is no separate validation set.
+
+\paragraph{Seed choice.}
+\Cref{tab:seeds} gives the final training loss of each seed, the mean over the last tenth of the steps.
+Seed \SeedBest{} has the lowest loss and is kept.
+The choice uses training loss only.
+\Cref{fig:training}a shows the three loss curves, which are almost indistinguishable.
+
+\begin{table}[h]
+\centering\small
+\input{generated/tab_seeds.tex}
+\caption{Final training loss by seed. The spread is \SeedSpread{} nats. The runs were on a laptop CPU with four cores and no GPU.}
+\label{tab:seeds}
+\end{table}
+
+\paragraph{Loss by position.}
+\Cref{fig:training}b shows the mean training loss at each position within a chunk, averaged over the whole pass, so it includes the early steps.
+The loss falls from about 3.34 nats after a few events of history to about 3.20 nats after a few hundred.
+Scored events have between 448 and 511 events of history and so lie on the flat part.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{figures/training.pdf}
+\caption{(a) Training loss of the three seeds, each point is the mean of the last 20 steps, sampled about once a minute. (b) Mean training loss by position in the 512-event chunk, smoothed over 8 positions, with a log axis.}
+\label{fig:training}
+\end{figure}
+
+%% ------------------------------------------------------------------------------------
+\section{Scoring}\label{app:scoring}
+
+The model reads at most 512 events.
+If the test stream were cut into plain chunks of 512, the first event of a chunk would have no history and the last would have 511.
+Surprisal falls as history grows, so the series would show a spurious sawtooth.
+
+Instead, a window of 512 events slides over the stream with a stride of 64 events, and only the last 64 events of each window are scored.
+Let the extended stream be the last 511 training events followed by the test events.
+The training events are context only and are never scored.
+Test event $j$ (counting from 0) is scored in window $k=\lfloor j/64\rfloor$.
+It is predicted from $448+(j \bmod 64)$ events of history, which lies between 448 and 511.
+The test month has 322{,}849 windows.
+A stride of 1 would give every event 511 events of history, but it would take about 5.5 days on our laptop, against about two hours for a stride of 64.
+
+The implementation is checked against a brute-force computation of $-\log p$ for individual events, and a scoring run that is stopped and resumed gives the same result as an uninterrupted run.
+
+%% ------------------------------------------------------------------------------------
+\section{Volatility and the regime flag}\label{app:vol}
+
+Realised volatility is computed on the continuous stream of training and test events.
+A window near the start of the test month reaches back into the end of the training period, and uses only events that precede the one measured.
+The regime flag is $\RV_t$ above the 90th percentile of $\RV_t$ over the training events with a full window, which is \Thr{} ticks.
+It flags 10.0\% of training events and \FlagShare{} of test events.
+The window $M=\WinM{}$ was chosen on 23 training days, before any test data were scored.
+It balances noise from single large sweeps against resolution in time.
+In the headline statistic $\RV_t$ is floored at $10^{-3}$ ticks before the logarithm.
+
+%% ------------------------------------------------------------------------------------
+\section{Statistics}\label{app:stats}
+
+\paragraph{Moving-block bootstrap.}
+Let $(x_t,y_t)_{t=1}^n$ be the series of $S_t$ and $\log\RV_t$ over the test month, with $n=\NEval{}$.
+With block length $b$, the blocks are all windows of $b$ consecutive pairs.
+A replicate draws $\lceil n/b\rceil$ block starts uniformly with replacement, glues the blocks, cuts the result to length $n$, and recomputes the correlation.
+We use $b=\BlockLen{}$ and \NBoot{} replicates.
+The interval is the 2.5th and 97.5th percentiles of the replicates \citep{kunsch1989}.
+Each replicate needs only the five sums $\sum x$, $\sum y$, $\sum x^2$, $\sum y^2$ and $\sum xy$ over its blocks.
+These are differences of prefix sums, evaluated at the few thousand positions that are needed, so \NBoot{} replicates over \NEval{} events run in seconds.
+
+\paragraph{Block length.}
+The length $b=\BlockLen{}$ is about one and a half days of the test month, which gives about 21 blocks.
+It was fixed before scoring from the autocorrelation of $\log\RV$ in the training period.
+\Cref{fig:checks}a and \cref{tab:blocks} (left) show the bootstrap standard error as a function of block length on the test series.
+The error rises with block length and levels off near the length used, at \SEUsed{}.
+Automatic rules for the block length exist \citep{politis2004,patton2009}, and we did not use them.
+\Cref{tab:blocks} (right) gives the autocorrelation of the two series.
+
+\begin{table}[h]
+\centering\small
+\begin{minipage}[t]{0.50\linewidth}\centering\input{generated/tab_blocks.tex}\end{minipage}
+\hfill
+\begin{minipage}[t]{0.42\linewidth}\centering\input{generated/tab_acf.tex}\end{minipage}
+\caption{Left: bootstrap standard error and 95\% interval of the correlation by block length. Right: autocorrelation of $\log\RV$ and of the mean surprisal.}
+\label{tab:blocks}
+\end{table}
+
+\paragraph{Shifted series.}
+\Cref{fig:checks}b recomputes the correlation after shifting the surprisal series against the volatility series.
+It is highest at zero shift and falls on both sides.
+Windows overlap, so a shift of less than $N$ events keeps most of the window in common.
+The figure is not a lead test.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{figures/checks.pdf}
+\caption{(a) Bootstrap standard error of the correlation by block length. The dashed line marks the length used. (b) Correlation after shifting the surprisal series by the given number of events.}
+\label{fig:checks}
+\end{figure}
+
+%% ------------------------------------------------------------------------------------
+\section{Rarity benchmark and further results}\label{app:rarity}
+
+\paragraph{Definition.}
+Let $c_v$ be the count of token $v$ in the training stream, with 0.5 added to every count.
+The rarity of a token is $-\log\bigl(c_v/\sum_u c_u\bigr)$.
+The rarity benchmark scores each test event by the rarity of its token.
+Its rolling mean over $N$ events is compared with volatility exactly as the model's is.
+The benchmark uses the training period only.
+
+\paragraph{Ladder of scoring rules.}
+\Cref{tab:ladder} adds a model that sees only the previous token.
+It estimates the next-token distribution from the training counts of pairs, smoothed towards the token frequencies.
+The slope is the change of the rolling mean surprisal in nats per unit of $\log\RV$.
+Better models are less surprised on average.
+Their correlation with volatility is lower.
+Their slopes are not lower, so the lower correlation comes from more spread in the surprisal that is unrelated to volatility.
+
+\begin{table}[h]
+\centering\small
+\input{generated/tab_ladder.tex}
+\caption{Three scoring rules on the test month. ``Flagged minus rest'' is the difference in mean rolling surprisal between flagged and unflagged events.}
+\label{tab:ladder}
+\end{table}
+
+\paragraph{By volatility decile.}
+\Cref{tab:deciles} gives the numbers behind \cref{fig:benchmark}a.
+\Cref{fig:level} adds a model that knows only the volatility decile before each event.
+Its score is the empirical entropy, in nats, of the token distribution among events whose preceding volatility lies in the decile, computed on the test month.
+The entropy rises from \EntLow{} nats in the calmest decile to \EntHigh{} in the most volatile.
+
+\begin{table}[h]
+\centering\small
+\input{generated/tab_deciles.tex}
+\caption{Mean surprisal in nats by volatility decile (deciles of the rolling window volatility $\RV$). ``Gap'' is rarity minus transformer.}
+\label{tab:deciles}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.62\linewidth]{figures/level_only.pdf}
+\caption{Mean surprisal by the volatility decile before the event. A model that knew only the volatility decile gains little over the rarity benchmark.}
+\label{fig:level}
+\end{figure}
+
+\paragraph{Token fields.}
+\Cref{tab:fields} gives the correlations behind \cref{fig:benchmark}b.
+In the calmest decile \BigCalm{} of events have a mid or large move.
+In the most volatile decile the share is \BigVol{}.
+
+\begin{table}[h]
+\centering\small
+\input{generated/tab_fields.tex}
+\caption{Correlation with $\log\RV$ of the rolling mean rarity of each field of the token.}
+\label{tab:fields}
+\end{table}
+
+\paragraph{By token class.}
+\Cref{fig:classes} gives the mean surprisal for each price-move class and each size bin.
+The model is below the benchmark in every class.
+Flat moves are the least surprising, and large trades are the most surprising.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{figures/classes.pdf}
+\caption{Mean surprisal on the test month by (a) price-move class and (b) size bin, for the rarity benchmark and the transformer.}
+\label{fig:classes}
+\end{figure}
+
+%% ------------------------------------------------------------------------------------
+\section{Reproducibility}\label{app:repro}
+
+The whole study runs from one script, \texttt{python run.py}.
+It downloads and verifies the data, builds events and tokens, trains the three seeds, selects one, scores the test month, evaluates, and exports the weights.
+It writes a checkpoint every 10 minutes of wall time, so that an interrupted run can resume, and it prints a status line with an estimated time to completion every minute.
+On a laptop with a four-core Intel i5-1038NG7 CPU and no GPU, a full run takes about six hours of computation.
+Each seed trains for about \TrainMinutes{} minutes and the scoring takes about two hours.
+
+The weights of the selected seed, the fitted tokeniser and a small file of prompt excerpts are in the repository, with a local interface for generating continuations of a tape.
+The figures, numbers and tables of this paper are produced from the run outputs by \texttt{paper/make\_figures.py}.
+The text quotes numbers only through the generated files, so the paper cannot disagree with the run.
+The rarity benchmark and the other descriptive checks of \cref{app:rarity} are computed in that script.
+
+\end{document}

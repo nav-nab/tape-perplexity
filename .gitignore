@@ -10,3 +10,13 @@ work/
 work_smoke/
 models_smoke/
 results_smoke/
+
+# LaTeX build files (the paper PDF itself is committed)
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.bbl
+paper/*.blg
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.synctex.gz
