@@ -1,6 +1,6 @@
 # Tokeniser design
 
-**Status (2026-10-09):** fully specified and implemented (`tape/tokeniser.py`, `tape/stages/events.py` and `tape/stages/tokenise.py`). The implementation choices for details the specification left open are in [section 9](#9-implementation-choices).
+**Status (2026-10-10):** fully specified, implemented (`tape/tokeniser.py`, `tape/stages/events.py` and `tape/stages/tokenise.py`) and fitted on the study's training period. The implementation choices for details the specification left open are in [section 9](#9-implementation-choices). The fitted values are in [section 12](#12-fitted-values-in-the-study). Numbers in sections 1 to 11 that come from the live design sample are marked as such.
 
 This tokeniser feeds the model described in [project-design.md](project-design.md).
 
@@ -26,7 +26,7 @@ flowchart TD
     B --> C["2. Merge<br/>same side, same timestamp, price strictly continuing<br/>consecutive records become one event"]
     C --> D["Events<br/>side, total size, last price"]
     D --> E["3. Derive<br/>size bin, price move in ticks, move class"]
-    E --> F["4. Encode<br/>one integer per event, vocabulary up to 224"]
+    E --> F["4. Encode<br/>one integer per event, vocabulary 182 in the study (at most 224)"]
     F --> G["Token sequence"]
 ```
 
@@ -35,10 +35,10 @@ flowchart TD
 | Field | Values | Meaning |
 |---|---|---|
 | Side | 2 | Buy aggressor or sell aggressor |
-| Size bin | up to 16 | Log-spaced edges, 3 per decade, rare tails merged |
+| Size bin | 13 in the study (at most 16) | Log-spaced edges, 3 per decade, rare tails merged |
 | Move class | 7 | Down large, down mid, down 1 tick, flat, up 1 tick, up mid, up large |
 
-The vocabulary is at most $2\times16\times7=224$ tokens, with one softmax over all of them.
+The vocabulary is at most $2\times16\times7=224$ tokens, with one softmax over all of them. The study has 13 size bins and so $2\times13\times7=182$ tokens.
 
 ## Worked example (illustrative numbers)
 
@@ -55,7 +55,7 @@ Event 1 (records 5001 to 5003):
 
 - **Side:** buy.
 - **Size:** $0.0020+0.0150+0.0400=0.0570$ BTC. This falls in the size bin from 0.05 to 0.108 BTC.
-- **Price move:** the last fill is 82,000.13 and the previous event's last fill was 82,000.10. The difference is 0.03 USDT, which is **+3 ticks**. A move of 2 or more ticks is "mid" or "large", depending on the training median of such moves. That median was about 104 ticks in a live sample, so this move is "up mid".
+- **Price move:** the last fill is 82,000.13 and the previous event's last fill was 82,000.10. The difference is 0.03 USDT, which is **+3 ticks**. A move of 2 or more ticks is "mid" or "large", depending on the training median of such moves. That median is 129 ticks in the study's training period, so this move is "up mid".
 
 That is one token. Record 5004 starts a separate sell event.
 
@@ -205,7 +205,7 @@ There are seven classes: **flat** ($\Delta_t=0$) plus three magnitude bins in ea
 
 The median is fit on absolute moves in the training period. Up and down moves share the same edges.
 
-Why bin 1 is exactly one tick: it is the smallest nonzero move. In the live sample, 51% of nonzero moves were exactly one tick, and the median of moves of 2 or more ticks was 104 ticks. These numbers come from one window of about 5 hours, so the study period will differ.
+Why bin 1 is exactly one tick: it is the smallest nonzero move. In the live design sample, 51% of nonzero moves were exactly one tick, and the median of moves of 2 or more ticks was 104 ticks. These numbers come from one window of about 5 hours. In the study's training period the median is 129 ticks.
 
 ## 7. Encoding
 
@@ -257,6 +257,20 @@ The specification left these details open. The code settles them as follows.
 
 ## 11. Evidence base
 
-The numbers in this document come from one live sample fetched on 2026-10-09 from the Binance market-data mirror (`data-api.binance.vision`). It holds 388,987 aggTrade records covering about 5.3 hours, with the price falling from about 82,648 to 81,054 USDT. Merging gives 199,944 events.
+The design-time numbers in this document (sections 1, 3, 5 and 6) come from one live sample fetched on 2026-10-09 from the Binance market-data mirror (`data-api.binance.vision`). It holds 388,987 aggTrade records covering about 5.3 hours, with the price falling from about 82,648 to 81,054 USDT. Merging gives 199,944 events.
 
 It is not the study period. Use it for design checks, not for results.
+
+## 12. Fitted values in the study
+
+These are the values fitted on the training period (1 September to 31 October 2025).
+
+| Item | Value |
+|---|---|
+| Records to events | 101,818,559 records merge into 51,819,298 events (1.96 records per event) |
+| Events after dropping the first | 31,157,015 for training and 20,662,282 for testing |
+| Median that splits "mid" from "large" | 129 ticks (1.29 USDT). The "large" class is open-ended above it |
+| Size bins | 16 raw bins merged to 13. The three largest raw bins (above 1.08 BTC) merge into the bin from 0.5 BTC upward, which is open-ended. No bin was merged at the small end |
+| Vocabulary | $2\times13\times7=182$ tokens |
+
+The fitted tokeniser is stored in `models/tokeniser.json`. The paper (Appendix B) tabulates the classes and bins with their shares of training events.

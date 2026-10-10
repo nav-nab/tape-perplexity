@@ -2,7 +2,7 @@
 
 Every token has an icon that shows its rough meaning. The icons illustrate inference in the write-up. A row of them (a "tape") is also the project logo.
 
-There are up to 224 icons, one per token (2 sides × 16 sizes × 7 price-move classes). The style is a "comet": a coloured dot with a tail.
+There are up to 224 icons, one per token (2 sides × 16 sizes × 7 price-move classes). The study has 13 size bins after merging, so 182 icons. The style is a "comet": a coloured dot with a tail.
 
 ## How to read an icon
 
@@ -44,15 +44,15 @@ The tail is the dot colour at 50% opacity. The logo tape uses the dark column on
 
 ## Uses
 
-- **Inference figure.** Show a short run of consecutive events as a row of icons, with the model's surprisal for each event underneath. The reader can see what kind of event surprised the model.
+- **Paper figures.** The strip at the top of Figure 1 is a stretch of tokens. Figure 2 is the key to the icons for five of the 13 size bins. The inference-interface appendix shows the GUI with generated tapes.
 - **Logo.** A tape of 30 to 40 icons. The prototype used a made-up sequence that goes calm, stress, calm. Stress shows as larger dots, longer tails and more switching between blue and orange. A real sequence from the test month could replace it.
 - **README banner.** `docs/assets/tape.svg` is a paper ticker tape of 21 icons, 800 px wide, shown at the top of the README. It is a generated figure from a made-up calm, stress, calm sequence.
-- **Key.** Two $16\times7$ grids, one per side, document the full vocabulary. Rows are size bins and columns are move classes.
+- **Key.** Two grids, one per side, document the vocabulary. Rows are size bins and columns are move classes. The paper's key shows a sample of the rows.
 
 ## Notes
 
 - A buy usually comes with a flat or rising price, and a sell with a flat or falling price. All combinations exist as tokens. A blue dot with a downward move is rare but valid.
 - The size bins are log-spaced in BTC. The dot radius is therefore linear in the logarithm of the order size.
-- Sixteen is the maximum number of size bins. If the tail rule merges bins, index the radius by the merged bin number. Then the largest bin keeps the largest radius.
+- Sixteen is the maximum number of size bins. If the tail rule merges bins, index the radius by the merged bin number. Then the largest bin keeps the largest radius. The study has 13 bins, so the largest dot has $r=1.6+0.42\times12=6.64$.
 - Colour carries the side and nothing else. A figure that must work in greyscale should add a text label for the side.
 - The formulas above are the specification. The prototypes were built as SVG in a design canvas, and they are not stored in the repo. Four styles were compared (candle, comet, heat tile, depth bars) and the comet was chosen.

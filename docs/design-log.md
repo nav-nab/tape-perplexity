@@ -2,7 +2,7 @@
 
 This file mirrors the running design log kept in the Claude project memory (`index.md`). It records each design decision as it was made. The detailed write-ups are in [project-design.md](project-design.md) and [tokeniser-design.md](tokeniser-design.md).
 
-**Last synced with project memory:** 2026-10-09.
+**Last synced with project memory:** 2026-10-10.
 
 ## Repo and process
 
@@ -55,6 +55,8 @@ This file mirrors the running design log kept in the Claude project memory (`ind
 - Paper revised (2026-10-10): the paper is written for a reader who knows machine learning but not finance. Appendix A now explains the market terms (taker and maker orders, sweeping, ticks and lots, volatility) and Section 2.1 points to it. The abstract is shortened and gives no precision beyond the headline correlation. Detection versus prediction is discussed in the body only. Figure 1 puts volatility under mean surprisal with both feeding a coloured correlation box. The token comet icons appear as a key figure in Section 2.1. Figure 4b adds the transformer's own correlation next to the rarity bars. Lists inside paragraphs became bullets throughout. The previous-token model is a count table and not a neural network; its smoothing was chosen on held-out training data (alpha 0.5, last 15% of training) and the result did not change (3.51 nats, 73% of the transformer's gain). The Limitations section no longer describes the process of the study and drops the paragraph on analysis added after the result.
 - Paper appendix on the inference interface added (2026-10-10): describes the generation GUI (sources, controls, what it reads) and shows a screenshot of the real interface after one generation. The example is the first stored excerpt (volatile-1), two continuations of 18 events at temperature 1, seed 1, chosen by rule and not for quality. The paper states that the example is an illustration and not evidence. The screenshot is made by `paper/make_gui_screenshot.py` against a running GUI.
 - README rewritten (2026-10-10) as a short project pitch for a cold reader: a prominent paper link, the two findings, the tape banner, key figures and a GUI screenshot, and the reproduce commands. The build checklist moved to `docs/progress.md`. README figures are PNG copies in `docs/assets/` (the paper's PDFs do not render on GitHub).
+
+- Docs swept (2026-10-10): the design documents now state the study's measured values next to the planned ones. Fitted tokeniser: 13 size bins and a vocabulary of 182 (the design said at most 224), median split 129 ticks. Data: 51.8 million events, 31.2 million for training and 20.7 million for testing (the design estimated 55 million in all). Block bootstrap: about 21 blocks of about 1.5 days (the design said about 25 and one day). Full run: about 6 hours (the design said about 5). Earlier entries in this log keep the planned values as they were written.
 
 ## Open decisions
 

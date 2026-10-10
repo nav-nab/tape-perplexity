@@ -2,7 +2,7 @@
 
 This note explains how the confidence interval for the headline correlation is computed. It is written to be reused in the write-up. Section 9 holds suggested wording for the paper.
 
-**Status (2026-10-09):** the method is fixed. The block length is fixed at 1,000,000 events (section 7). The block-length check on the surprisal series is run by the evaluation stage (results in `results/results.json` and `results/block_length.png`).
+**Status (2026-10-10):** the method is fixed and has been run. The block length is 1,000,000 events (section 7), and the check on the surprisal series (section 7) supports it. The study's interval is 0.42 to 0.60 around a correlation of 0.56. The results are in `results/results.json` and `results/block_length.png`.
 
 ---
 
@@ -116,7 +116,7 @@ The standard conditions for consistency are:
 
 ## 6. Computing it cheaply
 
-The test month has about 25 million events, and we need thousands of replicates. Resampling 25 million points each time would be slow. Because $\hat\rho$ depends only on five sums, we can avoid it.
+The test month has about 21 million events, and we need thousands of replicates. Resampling 25 million points each time would be slow. Because $\hat\rho$ depends only on five sums, we can avoid it.
 
 Compute running sums once:
 
@@ -136,7 +136,7 @@ The five sums over block $\mathcal B_j$ are then differences, for example $\sum_
 - If $b$ is too short, the blocks cut the dependence at lag $b$, and the interval is too narrow.
 - If $b$ is too long, there are few blocks ($k=n/b$), and the interval itself becomes noisy.
 
-**The textbook rule** gives $b$ of order $n^{1/3}$ for variance estimation (Hall, Horowitz and Jing, 1995). Politis and White (2004) give an automatic data-driven version. For $n=25$ million, $n^{1/3}\approx290$ events. That is far below the dependence range of our series, which is at least 3000 events from the rolling window alone. So the textbook rule does not apply directly, and the length must come from the data.
+**The textbook rule** gives $b$ of order $n^{1/3}$ for variance estimation (Hall, Horowitz and Jing, 1995). Politis and White (2004) give an automatic data-driven version. For $n=21$ million, $n^{1/3}\approx275$ events. That is far below the dependence range of our series, which is at least 3000 events from the rolling window alone. So the textbook rule does not apply directly, and the length must come from the data.
 
 **Evidence from the training period.** Without a model yet, I used $\log \mathrm{RV}_t$ as a stand-in for both series, since the surprisal series is also a 3000-event rolling mean. The numbers cover the 61 training days (Sep and Oct 2025), and none of the test month.
 
@@ -159,14 +159,20 @@ How the standard error of the mean of $\log \mathrm{RV}_t$, estimated from block
 | 1,000,000 | 30 | 83.0 | 57.9 |
 | 3,000,000 | 10 | 98.0 | 90.9 |
 
-**Reading the evidence.** The ratio keeps growing as blocks get longer. There is no plateau up to several million events, and a block of 1,000,000 events is roughly one day of trading. Volatility in this data is persistent on the scale of days, so the effective number of independent stretches is small. Short blocks, such as 3000 or 30,000 events, would understate the uncertainty by a large factor.
+**Reading the evidence.** The ratio keeps growing as blocks get longer. There is no plateau up to several million events, and a block of 1,000,000 events is roughly one to two days of trading (about 0.5 million events a day in the training period). Volatility in this data is persistent on the scale of days, so the effective number of independent stretches is small. Short blocks, such as 3000 or 30,000 events, would understate the uncertainty by a large factor.
 
-**Decision: $b=1{,}000{,}000$ events, about one trading day.**
+**Decision: $b=1{,}000{,}000$ events, about 1.5 days of the test month.**
 - It reaches 85% of the ratio seen at 3 million events with all days included, and about 64% with 10 October excluded. By 1,000,000 events the autocorrelation has fallen to 0.15 to 0.20.
-- It leaves about 25 blocks in the test month, enough for a usable interval.
+- It leaves about 21 blocks in the test month, enough for a usable interval.
 - Longer blocks would leave too few blocks to resample.
 
-**Limits of this check.** It uses $\log \mathrm{RV}$ as a proxy for both series. The evaluation stage repeats the same check on the surprisal series over the test month. Choosing the block length from the series being resampled is the usual practice, and the check measures dependence only. It does not use the size of the correlation.
+**Result on the test month.** The evaluation stage repeated the check on the series that the statistic is built from. The bootstrap standard error of the correlation rises with block length and levels off near the length used.
+
+| Block length (events) | 1,000 | 10,000 | 100,000 | 300,000 | 1,000,000 | 2,000,000 |
+|---|---|---|---|---|---|---|
+| Standard error | 0.007 | 0.017 | 0.030 | 0.040 | 0.045 | 0.041 |
+
+**Limits of this check.** The training-period evidence above uses $\log \mathrm{RV}$ as a proxy for both series. The test-month check uses the real series. Choosing the block length from the series being resampled is the usual practice, and the check measures dependence only. It does not use the size of the correlation.
 
 ## 8. What the interval does and does not cover
 
@@ -181,7 +187,7 @@ How the standard error of the mean of $\log \mathrm{RV}_t$, estimated from block
 
 ## 9. Suggested wording for the write-up
 
-> We compute a 95% confidence interval for the correlation using a moving-block bootstrap. Both series are 3000-event rolling means, so consecutive values are almost identical, and volatility is persistent on the scale of days. We therefore resample blocks of 1,000,000 consecutive events (about one trading day), drawing blocks with replacement and recomputing the correlation on the reassembled series. We repeat this 2,000 times and report the 2.5th and 97.5th percentiles. The interval reflects the sampling uncertainty of a single test month. It does not cover training randomness or other periods.
+> We compute a 95% confidence interval for the correlation using a moving-block bootstrap. Both series are 3000-event rolling means, so consecutive values are almost identical, and volatility is persistent on the scale of days. We therefore resample blocks of 1,000,000 consecutive events (about 1.5 days of the test month), drawing blocks with replacement and recomputing the correlation on the reassembled series. We repeat this 2,000 times and report the 2.5th and 97.5th percentiles. The interval reflects the sampling uncertainty of a single test month. It does not cover training randomness or other periods.
 
 ## 10. References
 

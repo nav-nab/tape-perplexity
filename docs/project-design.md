@@ -1,6 +1,6 @@
 # Tape Perplexity: project design
 
-**Status (2026-10-09):** design complete and the code is written. It has been tested on synthetic data and on a five-day real-data smoke run. The full study has not been run yet. The tokeniser is specified in [tokeniser-design.md](tokeniser-design.md), and the confidence interval is specified in [block-bootstrap.md](block-bootstrap.md).
+**Status (2026-10-10):** the study has been run and is written up in the [paper](../paper/main.pdf). This document records the design as it was specified, with the measured values added where they differ from the plan. The tokeniser is specified in [tokeniser-design.md](tokeniser-design.md), and the confidence interval is specified in [block-bootstrap.md](block-bootstrap.md).
 
 Part 1 is a short overview. Part 2 holds the detailed design notes.
 
@@ -27,7 +27,7 @@ The test is whether the network's *perplexity* (how surprised it is by the next 
 flowchart TD
     A["Binance BTCUSDT aggTrades<br/>raw records, microsecond timestamps"] --> B["Clean and order<br/>drop invalid records, sort by aggregate trade ID"]
     B --> C["Merge records into events<br/>one event = one taker order"]
-    C --> D["Tokenise<br/>side, size bin, price-move class<br/>vocabulary up to 224, no time fields"]
+    C --> D["Tokenise<br/>side, size bin, price-move class<br/>vocabulary of 182 in the study, no time fields"]
     D --> E["Train causal transformer<br/>next-token loss, training period"]
     E --> F["Per-event surprisal<br/>test period"]
     F --> G["Rolling mean over N events<br/>perplexity series"]
@@ -35,6 +35,12 @@ flowchart TD
     G --> I["Compare<br/>plot, correlation, block-bootstrap CI"]
     H --> I
 ```
+
+## What we found
+
+- **The model is surprised by volatility.** Rolling mean surprisal correlates with log realised volatility at 0.56 on the test month (95% block-bootstrap interval 0.42 to 0.60).
+- **But less surprised than rarity alone would suggest.** Part of that link is built in, because large price moves are rare tokens. A benchmark that scores each event only by token rarity correlates at 0.68. The transformer stays about 1.1 nats below that benchmark even in the most volatile decile.
+- **One model, one month, one market.** The [paper](../paper/main.pdf) has the details and the limitations.
 
 ## Around the study
 
@@ -51,7 +57,7 @@ flowchart TD
 ## Why it might work, and why it might not
 
 - *Might work:* in a calm market the sequence of sizes and price moves is regular, so the model predicts it well. In a stressed market the pattern changes, so the model should be more surprised.
-- *Might not:* large price moves are themselves tokens, so some link between perplexity and volatility is expected almost by construction. This is accepted. The model is meant to learn the regime from the data. The question is how strong and stable the relationship is on the held-out test period.
+- *Might not:* large price moves are themselves tokens, so some link between perplexity and volatility is expected almost by construction. This is accepted. The model is meant to learn the regime from the data. The question is how strong and stable the relationship is on the held-out test period. The paper measures the built-in part with a token-rarity benchmark.
 
 ---
 
@@ -83,7 +89,7 @@ Left out by default:
 - **Period:** 1 September to 30 November 2025 (UTC), 91 days. Timestamps in files from 2025 on are in **microseconds**.
 - **Split:** chronological. Training is September and October (61 days). Testing is November (30 days).
 - **Why this period:** September 2025 is the calmest month since January 2025. The training months include the 10 October liquidation crash. November has several separate stressed stretches, so the test result does not rest on a single day. In a daily-volatility screen, 14 of the 30 test days were above the training 90th percentile.
-- **Size:** the script downloads the 91 daily files, which total about 1.5 GB compressed. The training period has 31 million events (measured). November is estimated at about 25 million, so the whole period holds about 55 million events.
+- **Size:** the script downloads the 91 daily files, which total about 1.5 GB compressed. The 91 files hold 101.8 million records, which merge into 51.8 million events (1.96 records per event). The first event is dropped, which leaves 31.2 million training events and 20.7 million test events.
 - **Cleaning:** drop records with price 0 or quantity 0. Binance uses these to flag duplicates found in a data audit. Order the remaining records by aggregate trade ID.
 - **Raw record fields** (names as in the Binance API):
 
@@ -105,7 +111,7 @@ Specified in full in [tokeniser-design.md](tokeniser-design.md). In brief:
 
 - One token per **event**, where an event is one taker order rebuilt from consecutive aggTrade records.
 - A token has three fields: **side** (2 values), **size** (log-spaced bins, at most 16), **price move** (7 classes, measured in ticks).
-- The three fields form one composite token ID. The vocabulary is at most $2\times16\times7=224$, with a single softmax.
+- The three fields form one composite token ID. The vocabulary is at most $2\times16\times7=224$, with a single softmax. In the study the tail rule leaves 13 size bins, so the vocabulary is $2\times13\times7=182$.
 - No time fields. Anything fitted uses the training period only.
 
 ## 5. Model
@@ -113,18 +119,18 @@ Specified in full in [tokeniser-design.md](tokeniser-design.md). In brief:
 - A small causal (decoder-only) transformer, trained with next-token cross-entropy on the training period.
 - **Size:** 6 layers, width 192, 6 attention heads, about 2.8 million parameters. Learned positions, pre-norm layers, GELU, tied input and output embeddings.
 - **Context:** 512 events.
-- **Compute:** the laptop (Intel i5-1038NG7, 4 cores) has no GPU that PyTorch can use, so training runs on CPU. Measured on random tokens: training runs at about 8,400 tokens/s, so one pass over 31 million events takes about 62 minutes. Forward-only scoring runs at about 27,000 tokens/s. One seed trains in about 62 minutes, so three seeds take about 3.1 hours. Only the selected seed is scored, which takes about 2 hours. With 15 to 20 minutes of data preparation, the whole run takes about 5 hours.
+- **Compute:** the laptop (Intel i5-1038NG7, 4 cores) has no GPU that PyTorch can use, so training runs on CPU. Measured on random tokens before the run: training ran at about 8,400 tokens/s and forward-only scoring at about 27,000 tokens/s. In the full run the three seeds trained for 68, 73 and 73 minutes. Only the selected seed is scored, which takes about 2 hours. With the data preparation, the whole run took about 6 hours.
 - The vocabulary is small, so the output layer is cheap.
 
 ### Training
 
-- **Objective:** next-token cross-entropy over the 224 token types. The loss per event is its surprisal, in nats.
+- **Objective:** next-token cross-entropy over the vocabulary. The loss per event is its surprisal, in nats.
 - **One pass** over the training stream (31 million events), with no separate validation set. Each batch is new data, so the running loss on each batch is an honest held-out estimate. If the loss is still falling at the end, a further pass can be added.
 - **Batches:** the training stream is cut into non-overlapping chunks of 512 events, and the chunks are shuffled. Each event is a prediction target once. Price moves are computed over the whole stream beforehand, not reset at chunk starts. The daily files join into one continuous stream, because the market is open 24/7.
-- **Optimiser:** AdamW with $\beta = (0.9, 0.95)$ (the usual choice for small transformers; PyTorch's default second moment is 0.999). Peak learning rate $10^{-3}$, 100 warm-up steps, cosine decay to 10% of the peak, gradient clipping at 1.0, about 16,000 tokens per step (about 1,900 steps per pass). Weight decay 0.1 on weight matrices and embeddings only, none on biases or layer norms. The last partial batch of chunks is dropped, so up to 31 chunks (under 16,000 events) at the end of the training period are not used as targets. No dropout.
+- **Optimiser:** AdamW with $\beta = (0.9, 0.95)$ (the usual choice for small transformers; PyTorch's default second moment is 0.999). Peak learning rate $10^{-3}$, 100 warm-up steps, cosine decay to 10% of the peak, gradient clipping at 1.0, about 16,000 tokens per step (about 1,900 steps per pass). Weight decay 0.1 on weight matrices and embeddings only, none on biases or layer norms. The last partial batch of chunks is dropped, so up to 31 chunks (under 16,000 events) at the end of the training period are not used as targets. In the run, 21 chunks (10,752 events) were dropped. No dropout.
 - **Frozen model:** after training, the weights stay fixed for the whole test month.
 - **Seeds:** three (0, 1 and 2). They share one recipe, and differ only in initial weights and chunk order.
-- **Which model is used for the results:** one model, the seed with the lowest final training loss, is used for all surprisal results. The final training loss is the mean over the last part of the pass. It is a fair held-out estimate, because every batch in a single pass is new data. Choosing by training loss keeps the test month out of the choice. The other two seeds serve as a check that the loss is similar. If the three losses differ noticeably, that is discussed before going further.
+- **Which model is used for the results:** one model, the seed with the lowest final training loss, is used for all surprisal results. The final training loss is the mean over the last part of the pass. It is a fair held-out estimate, because every batch in a single pass is new data. Choosing by training loss keeps the test month out of the choice. The other two seeds serve as a check that the loss is similar. If the three losses differ noticeably, that is discussed before going further. In the run the final losses were 3.1166 (seed 2, selected), 3.1227 and 3.1295 nats. The spread of 0.0129 nats is stated as a limitation in the paper, and the other seeds were not scored.
 
 ## 6. The perplexity signal
 
@@ -151,7 +157,7 @@ Every test event gets a surprisal from the frozen model, given the events just b
 - **Why not plain chunks.** The model reads at most 512 events. If the test stream were cut into plain 512-event chunks, the first event of each chunk would have no history and the last would have 511. Surprisal falls as history grows, so the series would show a spurious sawtooth with a period of 512 events.
 - **Sliding windows.** A 512-event window slides over the test stream with a **stride of 64** events. In each window, only the last 64 events are scored. Every scored event therefore has between 448 and 511 events of history. A stride of 1 would give exactly 511 for every event, but would take about 5.5 days on the laptop.
 - **Month boundary.** The stream is continuous across the boundary between October and November. The first November events take their history from the last 511 October events. Those October events are context only and are not scored.
-- **Cost.** About 200 million token-forwards for November, estimated at about 2 hours on the laptop CPU (range 2 to 3 hours). Only the selected model is scored.
+- **Cost.** The test month has 322,849 windows of 512 events, about 165 million token-forwards, which took about 2 hours on the laptop CPU. Only the selected model is scored.
 
 ## 7. The regime (volatility) signal
 
@@ -168,7 +174,7 @@ $$
 - In a check on the 61 training days, the threshold came to about 251 ticks. Four properties are worth knowing:
   - The crash of 10 October supplies 45% of all flagged events. Excluding it would lower the threshold to about 222 ticks. It is kept, because the crash is part of the training data.
   - Flagged events are 10% of events but only about 2% of clock time, because trading is much busier in stressed periods.
-  - The volatility level shifts between months. The September threshold (159 ticks) would flag 50% of October events. So the share of flagged events in the test month need not be 10%.
+  - The volatility level shifts between months. The September threshold (159 ticks) would flag 50% of October events. So the share of flagged events in the test month need not be 10%. In the test month 7.6% of events are flagged.
   - Most flagged episodes are short. 82% last under one window (3000 events), but they hold only 16% of flagged events. The 33 episodes of 10,000 events or more hold 56%.
 - **Why $M=3000$.** It was chosen on 23 training days (none from the test month).
   - Below about 1000, one large sweep supplies a large share of a window's variance.
@@ -181,8 +187,8 @@ $$
 
 - Plot the perplexity series against realised volatility over the test period.
 - Report the correlation between them on the test period.
-- Give a **block-bootstrap confidence interval**, because consecutive events are strongly dependent. The method and the evidence for the block length are in [block-bootstrap.md](block-bootstrap.md). The block length is 1,000,000 events (about one trading day), with about 25 blocks in the test month.
-- No other statistics are planned (see section 2).
+- Give a **block-bootstrap confidence interval**, because consecutive events are strongly dependent. The method and the evidence for the block length are in [block-bootstrap.md](block-bootstrap.md). The block length is 1,000,000 events (about 1.5 days of the test month), with about 21 blocks.
+- The statistic planned in advance is this correlation with its interval (see section 2). After seeing the result, the paper adds descriptive checks that interpret it: a token-rarity benchmark, a model that sees only the previous token, and the entropy of the token distribution given the volatility level. The paper labels them as designed after the result.
 
 ## 9. Generation GUI
 
@@ -270,12 +276,12 @@ The script writes these files but does not run `git`. The commit is made by hand
 
 The generation GUI is not a stage of this script. It is a separate command (see section 9). It needs only the files kept in the repo: the weights, the tokeniser and the prompt excerpts. It does not need the downloaded or tokenised data.
 
-## 11. Open decisions
+## 11. Planned checks and their outcomes
 
-There are no open decisions. Two planned checks are handled as follows.
+There are no open decisions. Two planned checks were run, with these outcomes.
 
-- **Block length.** The block length was chosen from the autocorrelation of log RV alone. The evaluation stage repeats the check on the series the statistic is built from. It reports the autocorrelation of both series on the test month, and the bootstrap standard error of the correlation for block lengths from 1,000 to 2,000,000 events (`results.json` and `block_length.png`). Choosing the block length from the series being resampled is the usual practice, and the check measures dependence only. If the standard error is still rising at 1,000,000 events, the interval is too narrow and the block length should be revisited (see [block-bootstrap.md](block-bootstrap.md)).
-- **Loss by position.** Training saves the mean loss at each position within a chunk (`summary.json`). It confirms that scored events, which have 448 to 511 events of history, sit on the flat part of the curve.
+- **Block length.** The block length was chosen from the autocorrelation of log RV alone. The evaluation stage repeats the check on the series the statistic is built from. It reports the autocorrelation of both series on the test month, and the bootstrap standard error of the correlation for block lengths from 1,000 to 2,000,000 events (`results.json` and `block_length.png`). Choosing the block length from the series being resampled is the usual practice, and the check measures dependence only. If the standard error is still rising at 1,000,000 events, the interval is too narrow and the block length should be revisited (see [block-bootstrap.md](block-bootstrap.md)). **Outcome:** the standard error rises with block length and levels off near the length used (0.045 at 1,000,000 events, 0.041 at 2,000,000), so the length was kept.
+- **Loss by position.** Training saves the mean loss at each position within a chunk (`summary.json`). It confirms that scored events, which have 448 to 511 events of history, sit on the flat part of the curve. **Outcome:** the loss falls from about 3.34 nats after a few events of history to about 3.20 nats after a few hundred.
 
 ## 12. Design rationale
 
