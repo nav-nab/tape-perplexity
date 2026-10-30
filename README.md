@@ -3,9 +3,7 @@
 <h1 align="center">tape-perplexity</h1>
 <p align="center"><b>Can a language model of the Bitcoin trade tape tell when the market gets turbulent?</b></p>
 
-<p align="center">
-  <a href="paper/main.pdf"><img alt="Read the paper" src="https://img.shields.io/badge/%F0%9F%93%84%20READ%20THE%20PAPER-PDF%20%C2%B7%2018%20pages-2563EB?style=for-the-badge"></a>
-</p>
+<h1 align="center"><a href="paper/main.pdf">📄 Read the paper →</a></h1>
 
 We turn every Bitcoin trade into a token and train a small causal transformer to predict the next one.
 Then we freeze it, point it at an unseen month, and watch how **surprised** it is.
